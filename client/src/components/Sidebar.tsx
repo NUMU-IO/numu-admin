@@ -2,17 +2,18 @@
  * Sidebar Component - NUMU Admin Dashboard
  * 
  * Design: Soft Minimalist with floating sidebar
- * Features: Icon navigation with labels, collapsible design
+ * Features: Icon navigation with labels, user profile with logout
  */
 
+import { useAuth } from "@/_core/hooks/useAuth";
 import { cn } from "@/lib/utils";
+import { trpc } from "@/lib/trpc";
 import {
   BarChart3,
   Building2,
   CreditCard,
   FileText,
   Home,
-  LayoutDashboard,
   LogOut,
   Settings,
   ShoppingCart,
@@ -20,6 +21,7 @@ import {
   Zap,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
+import { toast } from "sonner";
 
 interface NavItem {
   icon: React.ElementType;
@@ -44,6 +46,30 @@ const secondaryNavItems: NavItem[] = [
 
 export default function Sidebar() {
   const [location] = useLocation();
+  const { user, logout } = useAuth();
+  const logoutMutation = trpc.auth.logout.useMutation({
+    onSuccess: () => {
+      logout();
+      toast.success("Logged out successfully");
+    },
+    onError: () => {
+      toast.error("Failed to logout");
+    },
+  });
+
+  const handleLogout = () => {
+    logoutMutation.mutate();
+  };
+
+  // Get user initials
+  const getInitials = (name?: string | null) => {
+    if (!name) return "AD";
+    const parts = name.split(" ");
+    if (parts.length >= 2) {
+      return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+  };
 
   return (
     <aside className="fixed left-0 top-0 z-40 h-screen w-64 bg-card border-r border-border/50 shadow-soft flex flex-col">
@@ -116,13 +142,24 @@ export default function Sidebar() {
       <div className="border-t border-border/50 p-4">
         <div className="flex items-center gap-3 px-2">
           <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary/20 to-primary/40 flex items-center justify-center">
-            <span className="text-sm font-semibold text-primary">AD</span>
+            <span className="text-sm font-semibold text-primary">
+              {getInitials(user?.name)}
+            </span>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-foreground truncate">Admin User</p>
-            <p className="text-xs text-muted-foreground truncate">admin@numu.io</p>
+            <p className="text-sm font-medium text-foreground truncate">
+              {user?.name || "Admin User"}
+            </p>
+            <p className="text-xs text-muted-foreground truncate">
+              {user?.email || "admin@numu.io"}
+            </p>
           </div>
-          <button className="p-2 rounded-lg hover:bg-accent transition-colors">
+          <button 
+            onClick={handleLogout}
+            disabled={logoutMutation.isPending}
+            className="p-2 rounded-lg hover:bg-accent transition-colors disabled:opacity-50"
+            title="Logout"
+          >
             <LogOut className="w-4 h-4 text-muted-foreground" />
           </button>
         </div>

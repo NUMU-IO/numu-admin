@@ -8,7 +8,10 @@
  * featuring all the components from the Figma design.
  */
 
+import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
+import { DashboardLayoutSkeleton } from "@/components/DashboardLayoutSkeleton";
+import { getLoginUrl } from "@/const";
 import {
   AnalyticsReport,
   BusinessIndicators,
@@ -29,8 +32,8 @@ import {
   TotalTicketStats,
   WorldMap,
 } from "@/components/dashboard";
+import { trpc } from "@/lib/trpc";
 import {
-  Activity,
   DollarSign,
   ShoppingCart,
   TrendingUp,
@@ -38,17 +41,51 @@ import {
 } from "lucide-react";
 
 export default function Home() {
+  const { user, loading, isAuthenticated } = useAuth();
+  
+  // Fetch dashboard stats from API
+  const { data: dashboardStats, isLoading: statsLoading } = trpc.dashboard.stats.useQuery(
+    undefined,
+    { enabled: isAuthenticated }
+  );
+
+  // Show loading skeleton while checking auth
+  if (loading) {
+    return <DashboardLayoutSkeleton />;
+  }
+
+  // Redirect to login if not authenticated
+  if (!isAuthenticated) {
+    window.location.href = getLoginUrl();
+    return <DashboardLayoutSkeleton />;
+  }
+
+  // Format currency
+  const formatCurrency = (cents: number) => {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(cents / 100);
+  };
+
+  // Format number with commas
+  const formatNumber = (num: number) => {
+    return new Intl.NumberFormat("en-US").format(num);
+  };
+
   return (
     <DashboardLayout
       title="Dashboard Overview"
-      subtitle="Welcome back! Here's what's happening with your platform today."
+      subtitle={`Welcome back, ${user?.name || "Admin"}! Here's what's happening with your platform today.`}
     >
       {/* Top Stats Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatsCard
           title="Total Revenue"
-          value="$89,432"
-          change={12.5}
+          value={statsLoading ? "Loading..." : formatCurrency(dashboardStats?.totalRevenue ?? 8943200)}
+          change={dashboardStats?.revenueChange ?? 12.5}
           changeLabel="vs last month"
           icon={DollarSign}
           iconColor="text-emerald-600"
@@ -56,8 +93,8 @@ export default function Home() {
         />
         <StatsCard
           title="Active Merchants"
-          value="5,612"
-          change={8.2}
+          value={statsLoading ? "Loading..." : formatNumber(dashboardStats?.activeMerchants ?? 5612)}
+          change={dashboardStats?.merchantsChange ?? 8.2}
           changeLabel="vs last month"
           icon={Users}
           iconColor="text-blue-600"
@@ -65,17 +102,17 @@ export default function Home() {
         />
         <StatsCard
           title="Total Orders"
-          value="5,161"
-          change={-2.4}
+          value={statsLoading ? "Loading..." : formatNumber(dashboardStats?.totalOrders ?? 5161)}
+          change={dashboardStats?.ordersChange ?? -2.4}
           changeLabel="vs last month"
           icon={ShoppingCart}
           iconColor="text-amber-600"
           iconBg="bg-amber-50"
         />
         <StatsCard
-          title="Conversion Rate"
-          value="391,152"
-          change={5.7}
+          title="Total Customers"
+          value={statsLoading ? "Loading..." : formatNumber(dashboardStats?.totalCustomers ?? 391152)}
+          change={dashboardStats?.customersChange ?? 5.7}
           changeLabel="vs last month"
           icon={TrendingUp}
           iconColor="text-purple-600"

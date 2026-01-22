@@ -1,0 +1,100 @@
+CREATE TABLE `customers` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`customerId` varchar(64) NOT NULL,
+	`merchantId` varchar(64) NOT NULL,
+	`email` varchar(320) NOT NULL,
+	`name` varchar(255),
+	`phone` varchar(32),
+	`status` enum('active','inactive') NOT NULL DEFAULT 'active',
+	`totalOrders` int DEFAULT 0,
+	`totalSpent` bigint DEFAULT 0,
+	`defaultAddress` json,
+	`tags` json,
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+	CONSTRAINT `customers_id` PRIMARY KEY(`id`),
+	CONSTRAINT `customers_customerId_unique` UNIQUE(`customerId`)
+);
+--> statement-breakpoint
+CREATE TABLE `merchants` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`merchantId` varchar(64) NOT NULL,
+	`name` varchar(255) NOT NULL,
+	`email` varchar(320) NOT NULL,
+	`domain` varchar(255),
+	`logoUrl` text,
+	`status` enum('active','pending','suspended','inactive') NOT NULL DEFAULT 'pending',
+	`plan` enum('free','basic','pro','enterprise') NOT NULL DEFAULT 'free',
+	`country` varchar(2),
+	`category` varchar(100),
+	`totalRevenue` bigint DEFAULT 0,
+	`totalOrders` int DEFAULT 0,
+	`totalProducts` int DEFAULT 0,
+	`settings` json,
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+	CONSTRAINT `merchants_id` PRIMARY KEY(`id`),
+	CONSTRAINT `merchants_merchantId_unique` UNIQUE(`merchantId`)
+);
+--> statement-breakpoint
+CREATE TABLE `orders` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`orderId` varchar(64) NOT NULL,
+	`merchantId` varchar(64) NOT NULL,
+	`customerId` varchar(64),
+	`customerEmail` varchar(320),
+	`customerName` varchar(255),
+	`status` enum('pending','processing','shipped','delivered','cancelled','refunded') NOT NULL DEFAULT 'pending',
+	`paymentStatus` enum('pending','paid','failed','refunded') NOT NULL DEFAULT 'pending',
+	`subtotal` bigint NOT NULL,
+	`tax` bigint DEFAULT 0,
+	`shipping` bigint DEFAULT 0,
+	`discount` bigint DEFAULT 0,
+	`total` bigint NOT NULL,
+	`currency` varchar(3) DEFAULT 'USD',
+	`shippingAddress` json,
+	`billingAddress` json,
+	`items` json,
+	`notes` text,
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+	CONSTRAINT `orders_id` PRIMARY KEY(`id`),
+	CONSTRAINT `orders_orderId_unique` UNIQUE(`orderId`)
+);
+--> statement-breakpoint
+CREATE TABLE `platform_stats` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`date` timestamp NOT NULL,
+	`totalRevenue` bigint DEFAULT 0,
+	`totalOrders` int DEFAULT 0,
+	`newMerchants` int DEFAULT 0,
+	`newCustomers` int DEFAULT 0,
+	`activeMerchants` int DEFAULT 0,
+	`conversionRate` int DEFAULT 0,
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	CONSTRAINT `platform_stats_id` PRIMARY KEY(`id`)
+);
+--> statement-breakpoint
+CREATE TABLE `products` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`productId` varchar(64) NOT NULL,
+	`merchantId` varchar(64) NOT NULL,
+	`name` varchar(255) NOT NULL,
+	`description` text,
+	`sku` varchar(100),
+	`price` bigint NOT NULL,
+	`compareAtPrice` bigint,
+	`costPerItem` bigint,
+	`currency` varchar(3) DEFAULT 'USD',
+	`status` enum('active','draft','archived') NOT NULL DEFAULT 'draft',
+	`inventory` int DEFAULT 0,
+	`category` varchar(100),
+	`images` json,
+	`variants` json,
+	`tags` json,
+	`totalSales` int DEFAULT 0,
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+	CONSTRAINT `products_id` PRIMARY KEY(`id`),
+	CONSTRAINT `products_productId_unique` UNIQUE(`productId`)
+);
