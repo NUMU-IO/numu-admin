@@ -13,6 +13,7 @@ import {
   Building2,
   CreditCard,
   FileText,
+  Globe,
   Home,
   LogOut,
   Settings,
@@ -37,6 +38,7 @@ const mainNavItems: NavItem[] = [
   { icon: Users, label: "Customers", href: "/customers" },
   { icon: BarChart3, label: "Analytics", href: "/analytics" },
   { icon: CreditCard, label: "Billing", href: "/billing" },
+  { icon: Globe, label: "Landing Page", href: "/landing-page" },
 ];
 
 const secondaryNavItems: NavItem[] = [

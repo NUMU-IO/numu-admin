@@ -12,6 +12,7 @@ import {
   getCustomers,
   getCustomerStats,
   getDashboardStats,
+  getLandingConfig,
   getMerchantById,
   getMerchants,
   getMerchantStats,
@@ -22,6 +23,7 @@ import {
   getRecentOrders,
   getRevenueByMonth,
   getTopMerchants,
+  updateLandingConfig,
   updateMerchantStatus,
   updateOrderStatus,
 } from "./numuDataLayer";
@@ -275,6 +277,25 @@ export const appRouter = router({
           status: input?.status,
           search: input?.search,
         });
+      }),
+  }),
+
+  // ============================================
+  // LANDING PAGE CONFIG (Admin Only)
+  // ============================================
+  landingPage: router({
+    getConfig: adminProcedure.query(async () => {
+      return getLandingConfig();
+    }),
+    updateConfig: adminProcedure
+      .input(z.object({
+        sections: z.record(z.string(), z.object({
+          visible: z.boolean(),
+          order: z.number(),
+        })),
+      }))
+      .mutation(async ({ input }) => {
+        return updateLandingConfig(input);
       }),
   }),
 });

@@ -13,6 +13,7 @@ import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Merchants from "./pages/Merchants";
 import Orders from "./pages/Orders";
+import LandingPage from "./pages/LandingPage";
 import Settings from "./pages/Settings";
 
 // Placeholder page for features not yet implemented
@@ -67,6 +68,7 @@ function Router() {
       <Route path="/billing">{() => <ProtectedRoute component={() => <ComingSoon title="Billing" />} />}</Route>
       <Route path="/reports">{() => <ProtectedRoute component={() => <ComingSoon title="Reports" />} />}</Route>
       <Route path="/settings">{() => <ProtectedRoute component={Settings} />}</Route>
+      <Route path="/landing-page">{() => <ProtectedRoute component={LandingPage} />}</Route>
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

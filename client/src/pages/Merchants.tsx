@@ -69,7 +69,9 @@ const statusLabels: Record<string, string> = {
 
 const planColors: Record<string, string> = {
   free: "bg-gray-100 text-gray-700",
+  demo: "bg-orange-100 text-orange-700",
   basic: "bg-blue-100 text-blue-700",
+  starter: "bg-blue-100 text-blue-700",
   pro: "bg-purple-100 text-purple-700",
   enterprise: "bg-indigo-100 text-indigo-700",
 };

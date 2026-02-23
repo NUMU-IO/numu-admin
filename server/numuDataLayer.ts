@@ -5,6 +5,7 @@
  * Handles authentication, caching, and error propagation.
  */
 
+import { TRPCError } from "@trpc/server";
 import { numuApi, NuMUProduct, NuMUCustomer, NuMUOrder } from "./numuApi";
 
 // Cache for API availability check
@@ -137,8 +138,8 @@ export async function getMerchants(params: {
     status: store.status as Merchant["status"],
     country: null,
     category: null,
-    totalRevenue: 0,
-    totalOrders: 0,
+    totalRevenue: store.total_revenue ?? 0,
+    totalOrders: store.total_orders ?? 0,
     totalProducts: 0,
     settings: null,
     createdAt: new Date(store.created_at),
@@ -498,4 +499,75 @@ export async function getRecentOrders(limit: number = 10): Promise<Order[]> {
   await requireApi();
   const result = await numuApi.listOrders({ page: 1, limit });
   return result.items.map(mapNuMUOrder);
+}
+
+// ============================================================================
+// Landing Page Config
+// ============================================================================
+
+/**
+ * Get landing page configuration
+ */
+export async function getLandingConfig() {
+  if (!(await isApiAvailable()) || !(await ensureAuthenticated())) {
+    // Return default config when API unavailable
+    return {
+      sections: {
+        hero: { visible: true, order: 0 },
+        preview: { visible: true, order: 1 },
+        features: { visible: true, order: 2 },
+        "import-showcase": { visible: true, order: 3 },
+        "ai-showcase": { visible: true, order: 4 },
+        "multichannel-showcase": { visible: true, order: 5 },
+        integrations: { visible: true, order: 6 },
+        testimonials: { visible: true, order: 7 },
+        cta: { visible: true, order: 8 },
+        footer: { visible: true, order: 9 },
+      },
+    };
+  }
+
+  try {
+    const data = await numuApi.getLandingConfig();
+    return data;
+  } catch (err: any) {
+    // Log detailed error for debugging
+    const status = err?.response?.status;
+    const detail = err?.response?.data?.detail || err?.message;
+    console.error(`[Data Layer] Failed to get landing config (status=${status}):`, detail);
+    // Fall back to defaults — never block admin UI for a read-only config fetch
+    return {
+      sections: {
+        hero: { visible: true, order: 0 },
+        preview: { visible: true, order: 1 },
+        features: { visible: true, order: 2 },
+        "import-showcase": { visible: true, order: 3 },
+        "ai-showcase": { visible: true, order: 4 },
+        "multichannel-showcase": { visible: true, order: 5 },
+        integrations: { visible: true, order: 6 },
+        testimonials: { visible: true, order: 7 },
+        cta: { visible: true, order: 8 },
+        footer: { visible: true, order: 9 },
+      },
+    };
+  }
+}
+
+/**
+ * Update landing page configuration
+ */
+export async function updateLandingConfig(input: { sections: Record<string, { visible: boolean; order: number }> }) {
+  if (!(await isApiAvailable()) || !(await ensureAuthenticated())) {
+    throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "NUMU API is not available" });
+  }
+
+  try {
+    const data = await numuApi.updateLandingConfig(input);
+    return data;
+  } catch (err: any) {
+    const status = err?.response?.status;
+    const detail = err?.response?.data?.detail || err?.message;
+    console.error(`[Data Layer] Failed to update landing config (status=${status}):`, detail);
+    throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Failed to update landing page config: ${detail}` });
+  }
 }

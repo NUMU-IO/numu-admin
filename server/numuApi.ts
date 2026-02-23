@@ -409,6 +409,8 @@ class NuMUApiClient {
     owner_email: string | null;
     plan: string | null;
     logo_url: string | null;
+    total_revenue: number;
+    total_orders: number;
     created_at: string;
   }>> {
     const response = await this.client.get<SuccessResponse<PaginatedResponse<any>>>("/api/v1/admin/stores", {
@@ -502,6 +504,26 @@ class NuMUApiClient {
         customersChange: 0,
       };
     }
+  }
+
+  // ==========================================================================
+  // Landing Page Config API
+  // ==========================================================================
+
+  /**
+   * Get landing page configuration
+   */
+  async getLandingConfig(): Promise<any> {
+    const res = await this.client.get("/api/v1/admin/landing-config/");
+    return res.data?.data;
+  }
+
+  /**
+   * Update landing page configuration
+   */
+  async updateLandingConfig(data: { sections: Record<string, { visible: boolean; order: number }> }): Promise<any> {
+    const res = await this.client.put("/api/v1/admin/landing-config/", data);
+    return res.data?.data;
   }
 
   // ==========================================================================
