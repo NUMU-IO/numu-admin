@@ -7,9 +7,6 @@ import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
-import { COOKIE_NAME } from "@shared/const";
-import { sdk } from "./sdk";
-import * as db from "../db";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -38,34 +35,6 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
-
-  // Dev login — bypasses OAuth for local development
-  if (process.env.NODE_ENV === "development") {
-    app.get("/api/dev-login", async (_req, res) => {
-      try {
-        const openId = "dev-admin-local";
-        await db.upsertUser({
-          openId,
-          name: "Dev Admin",
-          email: "dev@admin.local",
-          role: "admin",
-          lastSignedIn: new Date(),
-        });
-        const token = await sdk.createSessionToken(openId, { name: "Dev Admin" });
-        res.cookie(COOKIE_NAME, token, {
-          httpOnly: true,
-          sameSite: "lax",
-          path: "/",
-          maxAge: 365 * 24 * 60 * 60 * 1000,
-        });
-        res.redirect("/");
-      } catch (error) {
-        console.error("[Dev Login] Error:", error);
-        res.status(500).json({ error: "Dev login failed. Is the local MySQL database running?" });
-      }
-    });
-    console.log("[Dev] Dev login available at /api/dev-login");
-  }
 
   // tRPC API
   app.use(

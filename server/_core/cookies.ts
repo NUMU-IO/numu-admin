@@ -1,4 +1,6 @@
-import type { CookieOptions, Request } from "express";
+import { COOKIE_NAME, SESSION_DURATION_MS, SESSION_ROTATION_THRESHOLD_MS } from "@shared/const";
+import type { CookieOptions, Request, Response } from "express";
+import { sdk } from "./sdk";
 
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 
@@ -47,4 +49,34 @@ export function getSessionCookieOptions(
     sameSite: isSecure ? "none" : "lax",
     secure: isSecure,
   };
+}
+
+/**
+ * Session rotation (AD-11): On each authenticated request, if the session was
+ * issued more than SESSION_ROTATION_THRESHOLD_MS ago, issue a fresh cookie with
+ * a new 24-hour window. This keeps active users seamlessly logged in while
+ * ensuring that stolen or stale sessions cannot persist indefinitely.
+ *
+ * Legacy tokens (issued before the iat fix) lack an iat claim and are
+ * unconditionally rotated so they migrate to the new 24-hour regime.
+ */
+export async function rotateSessionIfNeeded(
+  req: Request,
+  res: Response,
+  session: { openId: string; name: string; iat?: number },
+): Promise<void> {
+  // Legacy tokens without iat are always rotated to migrate them to the new
+  // 24-hour duration with a proper iat claim.
+  if (session.iat != null) {
+    const sessionAgeMs = Date.now() - session.iat * 1000;
+    if (sessionAgeMs < SESSION_ROTATION_THRESHOLD_MS) return;
+  }
+
+  const newToken = await sdk.createSessionToken(session.openId, {
+    name: session.name,
+    expiresInMs: SESSION_DURATION_MS,
+  });
+
+  const cookieOptions = getSessionCookieOptions(req);
+  res.cookie(COOKIE_NAME, newToken, { ...cookieOptions, maxAge: SESSION_DURATION_MS });
 }

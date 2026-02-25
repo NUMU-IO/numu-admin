@@ -1,4 +1,4 @@
-import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
+import { COOKIE_NAME, SESSION_DURATION_MS } from "@shared/const";
 import axios from "axios";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
@@ -39,15 +39,8 @@ export const appRouter = router({
       .mutation(async ({ input, ctx }) => {
         const numuApiUrl = process.env.NUMU_API_URL;
 
-        // Dev bypass: no real backend configured — issue a local admin session
         if (!numuApiUrl) {
-          const sessionToken = await sdk.createSessionToken("dev-admin-local", {
-            name: "Dev Admin",
-            expiresInMs: ONE_YEAR_MS,
-          });
-          const cookieOptions = getSessionCookieOptions(ctx.req);
-          ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
-          return { success: true as const, name: "Dev Admin", email: input.email, role: "admin" };
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "NUMU_API_URL is not configured" });
         }
 
         try {
@@ -78,10 +71,10 @@ export const appRouter = router({
 
           const sessionToken = await sdk.createSessionToken(user.id, {
             name: user.full_name ?? user.name ?? "",
-            expiresInMs: ONE_YEAR_MS,
+            expiresInMs: SESSION_DURATION_MS,
           });
           const cookieOptions = getSessionCookieOptions(ctx.req);
-          ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+          ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: SESSION_DURATION_MS });
 
           return { success: true as const, name: user.full_name ?? user.name ?? "", email: user.email, role: user.role };
         } catch (e: unknown) {
