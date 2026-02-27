@@ -51,8 +51,9 @@ export const appRouter = router({
           const user = res.data?.data?.user;
           if (!user) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Invalid response from NUMU API" });
 
-          const allowedRoles = ["admin", "super_admin", "ADMIN", "SUPER_ADMIN"];
-          if (!allowedRoles.includes(user.role)) {
+          const allowedRoles = ["admin", "super_admin"];
+          const userRole = user.role?.toLowerCase().trim();
+          if (!allowedRoles.includes(userRole)) {
             throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
           }
 
