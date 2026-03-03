@@ -56,6 +56,15 @@ Sentry.init({
   },
 });
 
+// Load Umami analytics conditionally (only when env vars are configured)
+if (import.meta.env.VITE_ANALYTICS_ENDPOINT && import.meta.env.VITE_ANALYTICS_WEBSITE_ID) {
+  const script = document.createElement("script");
+  script.defer = true;
+  script.src = `${import.meta.env.VITE_ANALYTICS_ENDPOINT}/umami`;
+  script.dataset.websiteId = import.meta.env.VITE_ANALYTICS_WEBSITE_ID;
+  document.body.appendChild(script);
+}
+
 const queryClient = new QueryClient();
 
 const redirectToLoginIfUnauthorized = (error: unknown) => {
