@@ -10,12 +10,25 @@ import {
   InsertProduct,
   InsertUser,
   merchants,
+  merchantStatusEnum,
   orders,
+  orderStatusEnum,
   platformStats,
   products,
+  productStatusEnum,
   users,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
+
+type MerchantStatus = (typeof merchantStatusEnum.enumValues)[number];
+type OrderStatus = (typeof orderStatusEnum.enumValues)[number];
+type ProductStatus = (typeof productStatusEnum.enumValues)[number];
+
+interface RevenueByMonthRow {
+  month: string;
+  revenue: string | null;
+  order_count: string | number | null;
+}
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -179,7 +192,7 @@ export async function getMerchants(params: {
 
   const conditions = [];
   if (status) {
-    conditions.push(eq(merchants.status, status as any));
+    conditions.push(eq(merchants.status, status as MerchantStatus));
   }
   if (search) {
     conditions.push(
@@ -232,7 +245,7 @@ export async function updateMerchantStatus(merchantId: string, status: string) {
 
   await db
     .update(merchants)
-    .set({ status: status as any, updatedAt: new Date() })
+    .set({ status: status as MerchantStatus, updatedAt: new Date() })
     .where(eq(merchants.merchantId, merchantId));
 
   return true;
@@ -279,7 +292,7 @@ export async function getOrders(params: {
 
   const conditions = [];
   if (status) {
-    conditions.push(eq(orders.status, status as any));
+    conditions.push(eq(orders.status, status as OrderStatus));
   }
   if (merchantId) {
     conditions.push(eq(orders.merchantId, merchantId));
@@ -341,7 +354,7 @@ export async function updateOrderStatus(orderId: string, status: string) {
 
   await db
     .update(orders)
-    .set({ status: status as any, updatedAt: new Date() })
+    .set({ status: status as OrderStatus, updatedAt: new Date() })
     .where(eq(orders.orderId, orderId));
 
   return true;
@@ -454,7 +467,7 @@ export async function getProducts(params: {
     conditions.push(eq(products.merchantId, merchantId));
   }
   if (status) {
-    conditions.push(eq(products.status, status as any));
+    conditions.push(eq(products.status, status as ProductStatus));
   }
   if (search) {
     conditions.push(
@@ -575,7 +588,7 @@ export async function getRevenueByMonth(months: number = 12) {
     ORDER BY month`
   );
 
-  return result.map((row: any) => ({
+  return (result as unknown as RevenueByMonthRow[]).map((row) => ({
     month: row.month,
     revenue: Number(row.revenue ?? 0),
     orders: Number(row.order_count ?? 0),
