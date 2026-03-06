@@ -78,7 +78,7 @@ export async function getOrders(params: {
   if (params.search) searchParams.set("search", params.search);
 
   const result = await apiClient<PaginatedResponse<ApiOrderItem>>(
-    `/admin/orders?${searchParams}`,
+    `/admin/orders/?${searchParams}`,
   );
 
   const orders = result.items.map(mapOrder);
@@ -97,9 +97,9 @@ export async function getOrderStats(): Promise<{
   const statuses = ["pending", "processing", "shipped", "delivered", "cancelled"] as const;
 
   const [allResult, ...statusResults] = await Promise.all([
-    apiClient<PaginatedResponse<ApiOrderItem>>("/admin/orders?page=1&limit=1"),
+    apiClient<PaginatedResponse<ApiOrderItem>>("/admin/orders/?page=1&limit=1"),
     ...statuses.map((s) =>
-      apiClient<PaginatedResponse<ApiOrderItem>>(`/admin/orders?status=${s}&page=1&limit=1`),
+      apiClient<PaginatedResponse<ApiOrderItem>>(`/admin/orders/?status=${s}&page=1&limit=1`),
     ),
   ]);
 

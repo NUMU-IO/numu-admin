@@ -62,8 +62,44 @@ export default defineConfig(({ mode }) => ({
     ],
     proxy: {
       "/api": {
-        target: "http://localhost:8000",
+        target: "http://localhost:8021",
         changeOrigin: true,
+        configure: (proxy) => {
+          // Rename auth cookies so admin and merchant dashboard
+          // don't share sessions (both run on localhost in dev).
+          const RENAMES: [string, string][] = [
+            ["access_token", "admin_access_token"],
+            ["refresh_token", "admin_refresh_token"],
+            ["csrf_token", "admin_csrf_token"],
+          ];
+
+          // Backend → Browser: rename cookies in Set-Cookie headers
+          proxy.on("proxyRes", (proxyRes) => {
+            const sc = proxyRes.headers["set-cookie"];
+            if (sc) {
+              proxyRes.headers["set-cookie"] = sc.map((c: string) => {
+                for (const [from, to] of RENAMES) {
+                  if (c.startsWith(`${from}=`)) {
+                    return `${to}${c.slice(from.length)}`;
+                  }
+                }
+                return c;
+              });
+            }
+          });
+
+          // Browser → Backend: rename cookies back in Cookie header
+          proxy.on("proxyReq", (proxyReq, req) => {
+            const cookie = req.headers.cookie;
+            if (cookie) {
+              let rewritten = cookie;
+              for (const [from, to] of RENAMES) {
+                rewritten = rewritten.replaceAll(to, from);
+              }
+              proxyReq.setHeader("cookie", rewritten);
+            }
+          });
+        },
       },
     },
     fs: {

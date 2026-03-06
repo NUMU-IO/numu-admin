@@ -68,7 +68,7 @@ export async function getCustomers(params: {
   if (params.search) searchParams.set("search", params.search);
 
   const result = await apiClient<PaginatedResponse<ApiCustomerItem>>(
-    `/admin/customers?${searchParams}`,
+    `/admin/customers/?${searchParams}`,
   );
 
   const customers = result.items.map(mapCustomer);
@@ -80,7 +80,7 @@ export async function getCustomerStats(): Promise<{
   active: number;
 }> {
   const result = await apiClient<PaginatedResponse<ApiCustomerItem>>(
-    "/admin/customers?page=1&limit=1",
+    "/admin/customers/?page=1&limit=1",
   );
   return { total: result.total, active: result.total };
 }

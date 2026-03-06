@@ -75,7 +75,7 @@ export async function getMerchants(params: {
   if (params.search) searchParams.set("search", params.search);
 
   const result = await apiClient<PaginatedResponse<ApiStoreItem>>(
-    `/admin/stores?${searchParams}`,
+    `/admin/stores/?${searchParams}`,
   );
 
   const pageOffset = (page - 1) * limit;
