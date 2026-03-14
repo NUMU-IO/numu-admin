@@ -15,6 +15,7 @@ import {
   Globe,
   Home,
   LogOut,
+  Scale,
   Settings,
   ShoppingCart,
   Users,
@@ -42,6 +43,7 @@ const mainNavItems: NavItem[] = [
 ];
 
 const secondaryNavItems: NavItem[] = [
+  { icon: Scale, label: "Reconciliation", href: "/reconciliation" },
   { icon: FileText, label: "Reports", href: "/reports" },
   { icon: Settings, label: "Settings", href: "/settings" },
 ];

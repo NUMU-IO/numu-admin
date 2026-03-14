@@ -372,3 +372,95 @@ export async function updateLandingConfig(
     body: JSON.stringify(config),
   });
 }
+
+// ─── Reconciliation ──────────────────────────────────────────────────────────
+
+export type ReconciliationRunStatus = "running" | "completed" | "failed";
+
+export type MismatchType =
+  | "amount_mismatch"
+  | "missing_transaction"
+  | "missing_order"
+  | "duplicate_transaction";
+
+export interface AdminReconciliationRun {
+  id: string;
+  gateway: string;
+  period_start: string;
+  period_end: string;
+  status: ReconciliationRunStatus;
+  total_orders_checked: number;
+  total_transactions_checked: number;
+  mismatches_found: number;
+  expected_amount_cents: number;
+  actual_amount_cents: number;
+  error_message: string | null;
+  completed_at: string | null;
+  created_at: string;
+}
+
+export interface AdminReconciliationMismatch {
+  id: string;
+  run_id: string;
+  mismatch_type: MismatchType | string;
+  order_id: string | null;
+  order_number: string | null;
+  transaction_id: string | null;
+  gateway_transaction_id: string | null;
+  expected_amount_cents: number | null;
+  actual_amount_cents: number | null;
+  gateway: string | null;
+  notes: string | null;
+  resolved: boolean;
+  resolved_at: string | null;
+  resolved_by: string | null;
+  created_at: string;
+}
+
+export interface TriggerReconciliationResult {
+  run_id: string;
+  status: string;
+  message: string;
+}
+
+export async function adminListReconciliationRuns(params?: {
+  skip?: number;
+  limit?: number;
+  status?: ReconciliationRunStatus;
+}): Promise<AdminReconciliationRun[]> {
+  const qs = new URLSearchParams();
+  if (params?.skip) qs.set("skip", String(params.skip));
+  if (params?.limit) qs.set("limit", String(params.limit));
+  if (params?.status) qs.set("status", params.status);
+  const query = qs.toString() ? `?${qs.toString()}` : "";
+  return apiClient<AdminReconciliationRun[]>(`/admin/reconciliation/runs${query}`);
+}
+
+export async function adminListRunMismatches(
+  runId: string,
+  params?: {
+    mismatch_type?: string;
+    resolved?: boolean;
+    skip?: number;
+    limit?: number;
+  }
+): Promise<AdminReconciliationMismatch[]> {
+  const qs = new URLSearchParams();
+  if (params?.mismatch_type) qs.set("mismatch_type", params.mismatch_type);
+  if (params?.resolved !== undefined) qs.set("resolved", String(params.resolved));
+  if (params?.skip) qs.set("skip", String(params.skip));
+  if (params?.limit) qs.set("limit", String(params.limit));
+  const query = qs.toString() ? `?${qs.toString()}` : "";
+  return apiClient<AdminReconciliationMismatch[]>(
+    `/admin/reconciliation/runs/${runId}/mismatches${query}`
+  );
+}
+
+export async function adminTriggerReconciliation(
+  targetDate: string // "YYYY-MM-DD"
+): Promise<TriggerReconciliationResult> {
+  return apiClient<TriggerReconciliationResult>("/admin/reconciliation/runs/trigger", {
+    method: "POST",
+    body: JSON.stringify({ target_date: targetDate }),
+  });
+}
