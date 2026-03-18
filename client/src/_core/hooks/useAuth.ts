@@ -23,6 +23,7 @@ export function useAuth(options?: UseAuthOptions) {
       }
     },
     retry: false,
+    staleTime: 5 * 60 * 1000, // trust cache for 5 min so setQueryData isn't immediately refetched
     refetchOnWindowFocus: false,
   });
 
