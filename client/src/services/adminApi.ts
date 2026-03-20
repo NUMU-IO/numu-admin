@@ -512,14 +512,14 @@ export async function directInvite(data: {
   company_name?: string;
   notes?: string;
 }): Promise<WaitlistEntry> {
-  return apiClient<WaitlistEntry>("/admin/waitlist/direct-invite/", {
+  return apiClient<WaitlistEntry>("/admin/waitlist/direct-invite", {
     method: "POST",
     body: JSON.stringify(data),
   });
 }
 
 export async function inviteWaitlistEntry(entryId: string): Promise<WaitlistEntry> {
-  return apiClient<WaitlistEntry>("/admin/waitlist/invite/", {
+  return apiClient<WaitlistEntry>("/admin/waitlist/invite", {
     method: "POST",
     body: JSON.stringify({ entry_id: entryId }),
   });
@@ -530,7 +530,7 @@ export async function updateWaitlistPriority(
   priorityScore: number,
   notes?: string,
 ): Promise<WaitlistEntry> {
-  return apiClient<WaitlistEntry>(`/admin/waitlist/${entryId}/priority/`, {
+  return apiClient<WaitlistEntry>(`/admin/waitlist/${entryId}/priority`, {
     method: "PATCH",
     body: JSON.stringify({ priority_score: priorityScore, notes }),
   });
