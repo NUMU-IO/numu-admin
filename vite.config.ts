@@ -62,8 +62,10 @@ export default defineConfig(({ mode }) => ({
     ],
     proxy: {
       "/api": {
-        target: "http://localhost:8021",
+        target: "https://numueg.app",
         changeOrigin: true,
+        cookieDomainRewrite: "",
+        secure: false,
         configure: (proxy) => {
           // Rename auth cookies so admin and merchant dashboard
           // don't share sessions (both run on localhost in dev).
@@ -88,15 +90,29 @@ export default defineConfig(({ mode }) => ({
             }
           });
 
-          // Browser → Backend: rename cookies back in Cookie header
+          // Browser → Backend: rename admin cookies back and strip
+          // the merchant dashboard's original cookies so they don't collide.
           proxy.on("proxyReq", (proxyReq, req) => {
             const cookie = req.headers.cookie;
             if (cookie) {
-              let rewritten = cookie;
-              for (const [from, to] of RENAMES) {
-                rewritten = rewritten.replaceAll(to, from);
-              }
-              proxyReq.setHeader("cookie", rewritten);
+              const pairs = cookie.split(";").map((p) => p.trim());
+              const origNames = new Set(RENAMES.map(([from]) => from));
+              const filtered = pairs
+                .filter((p) => {
+                  // Drop the merchant dashboard's plain cookies
+                  const name = p.split("=")[0];
+                  return !origNames.has(name);
+                })
+                .map((p) => {
+                  // Rename admin_* back to original names
+                  for (const [from, to] of RENAMES) {
+                    if (p.startsWith(`${to}=`)) {
+                      return `${from}${p.slice(to.length)}`;
+                    }
+                  }
+                  return p;
+                });
+              proxyReq.setHeader("cookie", filtered.join("; "));
             }
           });
         },

@@ -15,9 +15,11 @@ import {
   Globe,
   Home,
   LogOut,
+  Scale,
   Settings,
   ShoppingCart,
   Users,
+  Ticket,
   Zap,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
@@ -39,9 +41,11 @@ const mainNavItems: NavItem[] = [
   { icon: BarChart3, label: "Analytics", href: "/analytics" },
   { icon: CreditCard, label: "Billing", href: "/billing" },
   { icon: Globe, label: "Landing Page", href: "/landing-page" },
+  { icon: Ticket, label: "Beta Program", href: "/beta-program" },
 ];
 
 const secondaryNavItems: NavItem[] = [
+  { icon: Scale, label: "Reconciliation", href: "/reconciliation" },
   { icon: FileText, label: "Reports", href: "/reports" },
   { icon: Settings, label: "Settings", href: "/settings" },
 ];
