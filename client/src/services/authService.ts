@@ -53,12 +53,17 @@ function mapUser(raw: AuthResponse["user"]): AdminUser {
   };
 }
 
+// Admin-only auth endpoints — these set the `admin_access_token` /
+// `admin_refresh_token` cookie pair so the admin session is isolated from
+// the merchant hub's `access_token` pair. Without the split, the
+// "Log in as merchant" impersonation flow would overwrite the admin's
+// session on .numueg.app and the admin panel would show the merchant's
+// email on the next API call.
 export async function login(
   email: string,
   password: string,
 ): Promise<AdminUser> {
-  // Use raw fetch (not apiClient) because this runs before CSRF token exists
-  const res = await fetch(`${API_BASE}/auth/login`, {
+  const res = await fetch(`${API_BASE}/admin/auth/login`, {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
@@ -73,24 +78,22 @@ export async function login(
   const json = await res.json();
   const user = mapUser(json.data.user);
 
-  // Verify admin role
+  // Server-side already gated on SUPER_ADMIN, but double-check here so a
+  // stale response from a mocked backend can't sneak through.
   if (user.role !== "super_admin" && user.role !== "admin") {
-    // Logout since we set cookies for a non-admin user
-    await fetch(`${API_BASE}/auth/logout`, {
+    await fetch(`${API_BASE}/admin/auth/logout`, {
       method: "POST",
       credentials: "include",
     }).catch(() => {});
     throw new Error("You do not have admin access to this panel.");
   }
 
-  // Fetch CSRF token now that we have auth cookies
   await initCSRF();
-
   return user;
 }
 
 export async function logout(): Promise<void> {
-  await fetch(`${API_BASE}/auth/logout`, {
+  await fetch(`${API_BASE}/admin/auth/logout`, {
     method: "POST",
     credentials: "include",
   }).catch(() => {});
@@ -98,10 +101,7 @@ export async function logout(): Promise<void> {
 }
 
 export async function getMe(): Promise<AdminUser> {
-  // Use raw fetch — NOT apiClient — to avoid the 401 → redirect loop.
-  // This is called on mount to check session validity; a 401 here simply
-  // means "not logged in", not "redirect now".
-  const res = await fetch(`${API_BASE}/auth/me`, {
+  const res = await fetch(`${API_BASE}/admin/auth/me`, {
     credentials: "include",
     headers: { "Content-Type": "application/json" },
   });
