@@ -110,6 +110,11 @@ export interface ImpersonateResponse {
   store_id: string;
   owner_id: string;
   owner_email: string;
+  /** Backend also returns the raw tokens so the frontend can construct an
+   * alternative handoff URL if needed; usually we just use dashboard_url
+   * which already carries the token in its fragment. */
+  access_token: string;
+  refresh_token: string;
 }
 
 export async function impersonateMerchant(
