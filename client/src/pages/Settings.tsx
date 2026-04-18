@@ -194,6 +194,10 @@ export default function Settings() {
             <Users className="w-4 h-4" />
             Admin Users
           </TabsTrigger>
+          <TabsTrigger value="meta" className="gap-2">
+            <Zap className="w-4 h-4" />
+            Meta Credentials
+          </TabsTrigger>
         </TabsList>
 
         {/* General Settings */}
@@ -690,6 +694,69 @@ export default function Settings() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+        </TabsContent>
+
+        {/* Meta Credentials */}
+        <TabsContent value="meta">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Zap className="w-5 h-5" />
+                Meta App Credentials
+              </CardTitle>
+              <CardDescription>
+                Configure Facebook, Instagram, and WhatsApp integration credentials
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid gap-4 max-w-md">
+                <div className="space-y-2">
+                  <Label htmlFor="metaAppId">META_APP_ID</Label>
+                  <Input
+                    id="metaAppId"
+                    placeholder="Enter your Meta App ID"
+                    value={platformSettings.platformName}
+                    onChange={(e) =>
+                      setPlatformSettings((s) => ({ ...s, platformName: e.target.value }))
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="metaAppSecret">META_APP_SECRET</Label>
+                  <Input
+                    id="metaAppSecret"
+                    type="password"
+                    placeholder="Enter your Meta App Secret"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="webhookVerifyToken">META_WEBHOOK_VERIFY_TOKEN</Label>
+                  <Input
+                    id="webhookVerifyToken"
+                    placeholder="Enter webhook verify token"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="loginConfigId">META_LOGIN_CONFIG_ID</Label>
+                  <Input
+                    id="loginConfigId"
+                    placeholder="Enter Login Config ID"
+                  />
+                </div>
+              </div>
+              <div className="flex items-center gap-2 pt-4">
+                <Button onClick={handleSave} disabled={saving}>
+                  {saving ? "Saving..." : "Save Credentials"}
+                </Button>
+                <Button variant="outline" onClick={() => toast.info("Test connection coming soon")}>
+                  Test Connection
+                </Button>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                These credentials are used for Meta (Facebook, Instagram, WhatsApp) OAuth flows and webhook verification.
+              </p>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </DashboardLayout>
