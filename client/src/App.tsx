@@ -20,6 +20,7 @@ import Billing from "./pages/Billing";
 import Reports from "./pages/Reports";
 import Reconciliation from "./pages/Reconciliation";
 import BetaProgram from "./pages/BetaProgram";
+import PricingPlans from "./pages/PricingPlans";
 
 // Placeholder page for features not yet implemented
 function ComingSoon({ title }: { title: string }) {
@@ -76,6 +77,7 @@ function Router() {
       <Route path="/settings">{() => <ProtectedRoute component={Settings} />}</Route>
       <Route path="/landing-page">{() => <ProtectedRoute component={LandingPage} />}</Route>
       <Route path="/beta-program">{() => <ProtectedRoute component={BetaProgram} />}</Route>
+      <Route path="/pricing-plans">{() => <ProtectedRoute component={PricingPlans} />}</Route>
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

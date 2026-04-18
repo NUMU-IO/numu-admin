@@ -41,6 +41,7 @@ const mainNavItems: NavItem[] = [
   { icon: BarChart3, label: "Analytics", href: "/analytics" },
   { icon: CreditCard, label: "Billing", href: "/billing" },
   { icon: Globe, label: "Landing Page", href: "/landing-page" },
+  { icon: CreditCard, label: "Pricing Plans", href: "/pricing-plans" },
   { icon: Ticket, label: "Beta Program", href: "/beta-program" },
 ];
 
