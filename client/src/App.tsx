@@ -41,7 +41,11 @@ function ComingSoon({ title }: { title: string }) {
  * - Unauthenticated + no OAuth (dev mode): redirect to /login
  * - Authenticated: render the page
  */
-function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
+function ProtectedRoute({
+  component: Component,
+}: {
+  component: React.ComponentType;
+}) {
   const { isAuthenticated, loading } = useAuth();
   const [, navigate] = useLocation();
 
@@ -67,17 +71,39 @@ function Router() {
     <Switch>
       <Route path="/login" component={Login} />
       <Route path="/">{() => <ProtectedRoute component={Home} />}</Route>
-      <Route path="/merchants">{() => <ProtectedRoute component={Merchants} />}</Route>
-      <Route path="/orders">{() => <ProtectedRoute component={Orders} />}</Route>
-      <Route path="/customers">{() => <ProtectedRoute component={Customers} />}</Route>
-      <Route path="/analytics">{() => <ProtectedRoute component={Analytics} />}</Route>
-      <Route path="/billing">{() => <ProtectedRoute component={Billing} />}</Route>
-      <Route path="/reports">{() => <ProtectedRoute component={Reports} />}</Route>
-      <Route path="/reconciliation">{() => <ProtectedRoute component={Reconciliation} />}</Route>
-      <Route path="/settings">{() => <ProtectedRoute component={Settings} />}</Route>
-      <Route path="/landing-page">{() => <ProtectedRoute component={LandingPage} />}</Route>
-      <Route path="/beta-program">{() => <ProtectedRoute component={BetaProgram} />}</Route>
-      <Route path="/pricing-plans">{() => <ProtectedRoute component={PricingPlans} />}</Route>
+      <Route path="/merchants">
+        {() => <ProtectedRoute component={Merchants} />}
+      </Route>
+      <Route path="/orders">
+        {() => <ProtectedRoute component={Orders} />}
+      </Route>
+      <Route path="/customers">
+        {() => <ProtectedRoute component={Customers} />}
+      </Route>
+      <Route path="/analytics">
+        {() => <ProtectedRoute component={Analytics} />}
+      </Route>
+      <Route path="/billing">
+        {() => <ProtectedRoute component={Billing} />}
+      </Route>
+      <Route path="/reports">
+        {() => <ProtectedRoute component={Reports} />}
+      </Route>
+      <Route path="/reconciliation">
+        {() => <ProtectedRoute component={Reconciliation} />}
+      </Route>
+      <Route path="/settings">
+        {() => <ProtectedRoute component={Settings} />}
+      </Route>
+      <Route path="/landing-page">
+        {() => <ProtectedRoute component={LandingPage} />}
+      </Route>
+      <Route path="/beta-program">
+        {() => <ProtectedRoute component={BetaProgram} />}
+      </Route>
+      <Route path="/pricing-plans">
+        {() => <ProtectedRoute component={PricingPlans} />}
+      </Route>
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
