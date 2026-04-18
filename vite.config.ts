@@ -25,7 +25,7 @@ function vitePluginCSP(): Plugin {
                 "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
                 "font-src 'self' https://fonts.gstatic.com",
                 "img-src 'self' data: blob: https:",
-                "connect-src 'self' https://*.numu.store https://*.sentry.io https://*.ingest.sentry.io",
+                "connect-src 'self' https://numueg.app https://*.numueg.app https://*.numu.store https://*.sentry.io https://*.ingest.sentry.io",
                 "worker-src 'self' blob:",
               ].join("; ") + ";",
             },
