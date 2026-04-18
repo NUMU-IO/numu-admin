@@ -79,7 +79,7 @@ function mapStore(store: RawStore): Merchant {
     merchantId: store.id,
     name: store.name,
     email: store.owner_email || `contact@${store.subdomain || store.slug || "unknown"}.com`,
-    domain: store.subdomain ? `${store.subdomain}.numu.io` : null,
+    domain: store.subdomain ? `${store.subdomain}.numueg.app` : null,
     logoUrl: store.logo_url ?? null,
     plan: store.plan || "free",
     status: store.status as Merchant["status"],

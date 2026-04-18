@@ -39,13 +39,14 @@ import {
 } from "@/components/ui/table";
 import { getLoginUrl } from "@/const";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getMerchants, getMerchantStats, updateMerchantStatus } from "@/services/merchantService";
+import { getMerchants, getMerchantStats, updateMerchantStatus, impersonateMerchant } from "@/services/merchantService";
 import {
   Building2,
   ChevronLeft,
   ChevronRight,
   Clock,
   ExternalLink,
+  LogIn,
   MoreHorizontal,
   Search,
   ShoppingCart,
@@ -123,6 +124,19 @@ export default function Merchants() {
     },
     onError: () => {
       toast.error("Failed to update merchant status");
+    },
+  });
+
+  // Impersonate mutation — mints merchant-hub cookies for the store's owner
+  // and opens the hub in a new tab logged in as them.
+  const impersonateMutation = useMutation({
+    mutationFn: (merchantId: string) => impersonateMerchant(merchantId),
+    onSuccess: (data) => {
+      toast.success(`Opening hub as ${data.owner_email}`);
+      window.open(data.dashboard_url, "_blank", "noopener,noreferrer");
+    },
+    onError: (err) => {
+      toast.error((err as Error).message || "Failed to impersonate");
     },
   });
 
@@ -320,17 +334,28 @@ export default function Merchants() {
                     {new Date(merchant.createdAt).toLocaleDateString()}
                   </TableCell>
                   <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => {
-                        setSelectedMerchant(merchant);
-                        setNewStatus(merchant.status);
-                        setShowStatusDialog(true);
-                      }}
-                    >
-                      <MoreHorizontal className="w-4 h-4" />
-                    </Button>
+                    <div className="flex items-center justify-end gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title="Log in as merchant"
+                        onClick={() => impersonateMutation.mutate(merchant.merchantId)}
+                        disabled={impersonateMutation.isPending}
+                      >
+                        <LogIn className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          setSelectedMerchant(merchant);
+                          setNewStatus(merchant.status);
+                          setShowStatusDialog(true);
+                        }}
+                      >
+                        <MoreHorizontal className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))

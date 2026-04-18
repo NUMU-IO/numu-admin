@@ -13,6 +13,14 @@ import { DashboardLayoutSkeleton } from "@/components/DashboardLayoutSkeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
@@ -20,13 +28,23 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getLoginUrl } from "@/const";
 import {
+  listAdmins,
+  inviteAdmin,
+  revokeAdmin,
+  type AdminUserItem,
+} from "@/services/adminUsersApi";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
   Bell,
   Building2,
+  Copy,
   CreditCard,
   Globe,
   Key,
+  Loader2,
   Mail,
   Shield,
+  Trash2,
   User,
   Users,
   Zap,
@@ -37,11 +55,78 @@ import { toast } from "sonner";
 export default function Settings() {
   const { user, loading, isAuthenticated } = useAuth();
   const [saving, setSaving] = useState(false);
+  const queryClient = useQueryClient();
+
+  // ── Admin Users ─────────────────────────────────────────────────────────
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteFirstName, setInviteFirstName] = useState("");
+  const [inviteLastName, setInviteLastName] = useState("");
+  const [tempPassword, setTempPassword] = useState<string | null>(null);
+
+  const adminsQuery = useQuery({
+    queryKey: ["admin-users"],
+    queryFn: listAdmins,
+    enabled: isAuthenticated,
+  });
+
+  const inviteMutation = useMutation({
+    mutationFn: () =>
+      inviteAdmin({
+        email: inviteEmail.trim(),
+        first_name: inviteFirstName.trim(),
+        last_name: inviteLastName.trim(),
+      }),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+      if (data.email_sent) {
+        toast.success(`Invite sent to ${data.user.email}`);
+        setInviteOpen(false);
+        resetInvite();
+      } else if (data.temporary_password) {
+        // No email sent — keep dialog open and surface the password so the
+        // admin can copy it to the invitee out-of-band.
+        setTempPassword(data.temporary_password);
+        toast.message("Admin created — email couldn't be sent, copy the password");
+      } else {
+        toast.success("Admin created");
+        setInviteOpen(false);
+        resetInvite();
+      }
+    },
+    onError: (err) => toast.error((err as Error).message || "Invite failed"),
+  });
+
+  const revokeMutation = useMutation({
+    mutationFn: (id: string) => revokeAdmin(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+      toast.success("Admin access revoked");
+    },
+    onError: (err) => toast.error((err as Error).message || "Revoke failed"),
+  });
+
+  const resetInvite = () => {
+    setInviteEmail("");
+    setInviteFirstName("");
+    setInviteLastName("");
+    setTempPassword(null);
+  };
+
+  const copyPassword = async () => {
+    if (!tempPassword) return;
+    try {
+      await navigator.clipboard.writeText(tempPassword);
+      toast.success("Copied to clipboard");
+    } catch {
+      toast.error("Copy failed — select and copy manually");
+    }
+  };
 
   // Platform settings state
   const [platformSettings, setPlatformSettings] = useState({
     platformName: "NUMU",
-    supportEmail: "support@numu.io",
+    supportEmail: "support@numueg.app",
     defaultCurrency: "USD",
     enableNewMerchantSignups: true,
     requireEmailVerification: true,
@@ -415,47 +500,196 @@ export default function Settings() {
         {/* Admin Users */}
         <TabsContent value="admins">
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="w-5 h-5" />
-                Admin Users
-              </CardTitle>
-              <CardDescription>
-                Manage admin access to the platform
-              </CardDescription>
+            <CardHeader className="flex flex-row items-start justify-between gap-4">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="w-5 h-5" />
+                  Admin Users
+                </CardTitle>
+                <CardDescription>
+                  Manage admin access to the platform
+                </CardDescription>
+              </div>
+              <Button size="sm" onClick={() => { resetInvite(); setInviteOpen(true); }}>
+                <Mail className="w-4 h-4 mr-2" />
+                Invite Admin
+              </Button>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {/* Current user */}
-                <div className="flex items-center justify-between p-4 bg-primary/5 border border-primary/20 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/20 to-primary/40 flex items-center justify-center">
-                      <User className="w-5 h-5 text-primary" />
-                    </div>
-                    <div>
-                      <p className="font-medium">{user?.name || "Admin User"}</p>
-                      <p className="text-sm text-muted-foreground">{user?.email}</p>
-                    </div>
+              <div className="space-y-3">
+                {adminsQuery.isLoading ? (
+                  <div className="flex items-center justify-center py-10 text-muted-foreground">
+                    <Loader2 className="h-5 w-5 animate-spin" />
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Badge className="bg-primary/10 text-primary">Owner</Badge>
-                    <span className="text-sm text-muted-foreground">You</span>
+                ) : adminsQuery.isError ? (
+                  <div className="py-6 text-sm text-red-600">
+                    Couldn't load admin users: {(adminsQuery.error as Error).message}.
+                    Make sure the backend build with the admin-users endpoint is deployed.
                   </div>
-                </div>
+                ) : (
+                  (adminsQuery.data ?? []).map((a: AdminUserItem) => {
+                    const isMe = a.email === user?.email;
+                    return (
+                      <div
+                        key={a.id}
+                        className={`flex items-center justify-between p-4 rounded-lg border ${
+                          isMe
+                            ? "bg-primary/5 border-primary/20"
+                            : "bg-card border-border/60"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/20 to-primary/40 flex items-center justify-center shrink-0">
+                            <User className="w-5 h-5 text-primary" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-medium truncate">
+                              {a.first_name} {a.last_name}
+                            </p>
+                            <p className="text-sm text-muted-foreground truncate">{a.email}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge
+                            className={`${
+                              a.status === "active"
+                                ? "bg-primary/10 text-primary"
+                                : "bg-muted text-muted-foreground"
+                            }`}
+                          >
+                            {isMe ? "Owner" : a.status === "active" ? "Admin" : a.status}
+                          </Badge>
+                          {isMe ? (
+                            <span className="text-sm text-muted-foreground">You</span>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                if (
+                                  confirm(
+                                    `Revoke admin access for ${a.email}? They will no longer be able to sign in to the admin panel.`,
+                                  )
+                                ) {
+                                  revokeMutation.mutate(a.id);
+                                }
+                              }}
+                              disabled={revokeMutation.isPending}
+                              title="Revoke admin access"
+                            >
+                              <Trash2 className="w-4 h-4 text-muted-foreground hover:text-red-600" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
 
-                {/* Placeholder for other admins */}
-                <div className="text-center py-8 text-muted-foreground">
-                  <Users className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                  <p>No other admin users</p>
-                  <p className="text-sm">Invite team members to help manage the platform</p>
-                  <Button variant="outline" className="mt-4" onClick={() => toast.info("Feature coming soon")}>
-                    <Mail className="w-4 h-4 mr-2" />
-                    Invite Admin
-                  </Button>
-                </div>
+                {adminsQuery.data && adminsQuery.data.length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Users className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                    <p>No admin users yet</p>
+                    <p className="text-sm">Invite team members to help manage the platform</p>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
+
+          {/* Invite dialog */}
+          <Dialog open={inviteOpen} onOpenChange={(open) => { setInviteOpen(open); if (!open) resetInvite(); }}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Invite an admin</DialogTitle>
+                <DialogDescription>
+                  They'll get an email with a temporary password and a link to the
+                  admin panel. Ask them to change the password after their first
+                  sign-in.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-3 py-2">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="invite-first">First name</Label>
+                    <Input
+                      id="invite-first"
+                      value={inviteFirstName}
+                      onChange={(e) => setInviteFirstName(e.target.value)}
+                      placeholder="Yahia"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="invite-last">Last name</Label>
+                    <Input
+                      id="invite-last"
+                      value={inviteLastName}
+                      onChange={(e) => setInviteLastName(e.target.value)}
+                      placeholder="Optional"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="invite-email">Email</Label>
+                  <Input
+                    id="invite-email"
+                    type="email"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                    placeholder="name@company.com"
+                  />
+                </div>
+
+                {tempPassword && (
+                  <div className="rounded-md border border-amber-300 bg-amber-50/60 p-3 text-sm">
+                    <p className="font-medium text-amber-900 mb-1">
+                      Copy this temporary password
+                    </p>
+                    <p className="text-amber-900/70 text-xs mb-2">
+                      We couldn't send the welcome email, so share this with the
+                      new admin yourself.
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <code className="flex-1 font-mono text-xs bg-white rounded px-2 py-1 border border-amber-200 break-all">
+                        {tempPassword}
+                      </code>
+                      <Button size="sm" variant="outline" onClick={copyPassword}>
+                        <Copy className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => { setInviteOpen(false); resetInvite(); }}
+                  disabled={inviteMutation.isPending}
+                >
+                  {tempPassword ? "Done" : "Cancel"}
+                </Button>
+                {!tempPassword && (
+                  <Button
+                    onClick={() => inviteMutation.mutate()}
+                    disabled={
+                      inviteMutation.isPending ||
+                      !inviteEmail.trim() ||
+                      !inviteFirstName.trim()
+                    }
+                  >
+                    {inviteMutation.isPending ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Mail className="w-4 h-4 mr-2" />
+                    )}
+                    Send invite
+                  </Button>
+                )}
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </TabsContent>
       </Tabs>
     </DashboardLayout>

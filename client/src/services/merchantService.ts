@@ -49,7 +49,7 @@ function mapStore(store: ApiStoreItem, index: number, pageOffset: number): Merch
     merchantId: store.id,
     name: store.name,
     email: store.owner_email || `contact@${store.subdomain || store.slug}.com`,
-    domain: store.subdomain ? `${store.subdomain}.numu.io` : null,
+    domain: store.subdomain ? `${store.subdomain}.numueg.app` : null,
     logoUrl: store.logo_url,
     plan: store.plan || "free",
     status: store.status as Merchant["status"],
@@ -103,4 +103,20 @@ export async function updateMerchantStatus(
     method: "PATCH",
     body: JSON.stringify({ status, reason }),
   });
+}
+
+export interface ImpersonateResponse {
+  dashboard_url: string;
+  store_id: string;
+  owner_id: string;
+  owner_email: string;
+}
+
+export async function impersonateMerchant(
+  merchantId: string,
+): Promise<ImpersonateResponse> {
+  return apiClient<ImpersonateResponse>(
+    `/admin/stores/${merchantId}/impersonate`,
+    { method: "POST" },
+  );
 }

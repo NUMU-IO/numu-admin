@@ -63,7 +63,7 @@ export default function Login() {
             <Input
               id="email"
               type="email"
-              placeholder="admin@numu.io"
+              placeholder="admin@numueg.app"
               autoComplete="email"
               required
               value={email}
