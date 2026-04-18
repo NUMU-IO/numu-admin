@@ -76,7 +76,6 @@
     "add": "^2.0.6",
     "autoprefixer": "^10.4.20",
     "cross-env": "^10.1.0",
-    "pnpm": "^10.15.1",
     "postcss": "^8.4.47",
     "prettier": "^3.6.2",
     "tailwindcss": "^4.1.14",
@@ -84,6 +83,5 @@
     "typescript": "5.9.3",
     "vite": "^7.1.7",
     "vitest": "^4.0.18"
-  },
+  }
 }
-
