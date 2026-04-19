@@ -2,7 +2,11 @@
  * Admin user management — list, invite, revoke platform admins.
  */
 
-import { apiClient } from "./api";
+// Use the shared /lib/apiClient so we share CSRF state with main.tsx's
+// bootstrap initCSRF call. The neighbour ./api has its own in-memory
+// csrfToken that never gets seeded, causing a 403 on the first call and
+// forcing a retry.
+import { apiClient } from "@/lib/apiClient";
 
 export interface AdminUserItem {
   id: string;
