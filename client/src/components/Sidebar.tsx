@@ -15,6 +15,7 @@ import {
   Globe,
   Home,
   LogOut,
+  Mail,
   Menu,
   Scale,
   Settings,
@@ -50,6 +51,7 @@ const secondaryNavItems: NavItem[] = [
   { icon: Scale, label: "Reconciliation", href: "/reconciliation" },
   { icon: FileText, label: "Reports", href: "/reports" },
   { icon: Menu, label: "Merchant Hub Nav", href: "/merchant-hub-nav" },
+  { icon: Mail, label: "Email Templates", href: "/email-templates" },
   { icon: Settings, label: "Settings", href: "/settings" },
 ];
 
