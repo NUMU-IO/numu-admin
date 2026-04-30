@@ -101,10 +101,28 @@ export async function logout(): Promise<void> {
 }
 
 export async function getMe(): Promise<AdminUser> {
-  const res = await fetch(`${API_BASE}/admin/auth/me`, {
+  // Try /me directly; on 401 attempt a single sliding refresh so a
+  // tab returning from idle inside the 7-day refresh window stays
+  // signed in instead of bouncing to OAuth. The refresh is
+  // server-side sliding (a successful POST mints a fresh 7-day
+  // refresh cookie too), so an active user never hits the wall.
+  let res = await fetch(`${API_BASE}/admin/auth/me`, {
     credentials: "include",
     headers: { "Content-Type": "application/json" },
   });
+
+  if (res.status === 401) {
+    const refresh = await fetch(`${API_BASE}/admin/auth/refresh`, {
+      method: "POST",
+      credentials: "include",
+    });
+    if (refresh.ok) {
+      res = await fetch(`${API_BASE}/admin/auth/me`, {
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }
 
   if (!res.ok) {
     throw new Error("Not authenticated");

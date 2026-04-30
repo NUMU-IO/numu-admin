@@ -23,8 +23,17 @@ export function useAuth(options?: UseAuthOptions) {
       }
     },
     retry: false,
-    staleTime: 5 * 60 * 1000, // trust cache for 5 min so setQueryData isn't immediately refetched
-    refetchOnWindowFocus: false,
+    // Trust cache briefly so setQueryData after login isn't immediately
+    // refetched, but short enough that returning to an idle tab fires a
+    // fresh check. Combined with ``refetchOnWindowFocus``, this fixes
+    // the idle-tab-404 case where the cached ``me`` still read
+    // authenticated even after the cookie expired — the next API call
+    // 401d and the apiClient redirected to ``/login`` without ever
+    // re-syncing the React Query cache (so other components kept
+    // rendering against stale state mid-flight).
+    staleTime: 60 * 1000,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
 
   const logout = useCallback(async () => {

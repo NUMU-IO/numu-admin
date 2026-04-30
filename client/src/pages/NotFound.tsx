@@ -1,10 +1,20 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { AlertCircle, Home } from "lucide-react";
+import { useEffect } from "react";
 import { useLocation } from "wouter";
 
 export default function NotFound() {
   const [, setLocation] = useLocation();
+
+  // Auto-redirect after 3 s. Most "404"s here aren't real broken
+  // pages — they happen when an idle tab returns and the OAuth /
+  // session-refresh redirect lands on a path wouter doesn't match.
+  // The button below stays clickable for the rare deliberate visit.
+  useEffect(() => {
+    const id = setTimeout(() => setLocation("/"), 3000);
+    return () => clearTimeout(id);
+  }, [setLocation]);
 
   const handleGoHome = () => {
     setLocation("/");

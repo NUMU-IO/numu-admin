@@ -65,11 +65,28 @@ export async function logout(): Promise<void> {
 }
 
 export async function getMe(): Promise<AdminUser> {
-  // Use raw fetch — NOT apiClient — to avoid the 401 → redirect loop.
-  const res = await fetch(`${API_BASE}/admin/auth/me`, {
+  // Use raw fetch — NOT apiClient — to avoid the 401 → redirect loop
+  // when the app first loads. But still attempt a single sliding
+  // refresh before declaring the user unauthenticated, so a tab that
+  // returns from idle inside the 7-day refresh window seamlessly
+  // re-authenticates instead of bouncing the user to the OAuth portal.
+  let res = await fetch(`${API_BASE}/admin/auth/me`, {
     credentials: "include",
     headers: { "Content-Type": "application/json" },
   });
+
+  if (res.status === 401) {
+    const refresh = await fetch(`${API_BASE}/admin/auth/refresh`, {
+      method: "POST",
+      credentials: "include",
+    });
+    if (refresh.ok) {
+      res = await fetch(`${API_BASE}/admin/auth/me`, {
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }
 
   if (!res.ok) {
     throw new Error("Not authenticated");
