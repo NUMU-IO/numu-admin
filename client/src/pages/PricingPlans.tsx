@@ -176,7 +176,7 @@ export default function PricingPlans() {
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Names */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <Label>Name (English)</Label>
                   <Input value={plan.name_en} onChange={(e) => updatePlan(idx, { name_en: e.target.value })} />
@@ -188,7 +188,7 @@ export default function PricingPlans() {
               </div>
 
               {/* Pricing */}
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <Label>Monthly Price (EGP)</Label>
                   <Input
@@ -294,7 +294,7 @@ export default function PricingPlans() {
                     onChange={(e) => setPromo({ ...promo, code: e.target.value.toUpperCase() })}
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <Label>Text (English)</Label>
                     <Input

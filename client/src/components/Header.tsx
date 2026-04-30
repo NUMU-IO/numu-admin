@@ -7,14 +7,17 @@
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Bell, Calendar, Search } from "lucide-react";
+import { Bell, Calendar, Menu, Search } from "lucide-react";
 
 interface HeaderProps {
   title: string;
   subtitle?: string;
+  /** Mobile-only: opens the sidebar drawer. Hidden on lg+ where the
+   *  sidebar is always visible. */
+  onOpenMobileNav?: () => void;
 }
 
-export default function Header({ title, subtitle }: HeaderProps) {
+export default function Header({ title, subtitle, onOpenMobileNav }: HeaderProps) {
   const today = new Date().toLocaleDateString("en-US", {
     weekday: "long",
     year: "numeric",
@@ -24,24 +27,34 @@ export default function Header({ title, subtitle }: HeaderProps) {
 
   return (
     <header className="sticky top-0 z-30 bg-background/80 backdrop-blur-sm border-b border-border/50">
-      <div className="flex items-center justify-between px-6 py-4">
-        {/* Left: Title */}
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">{title}</h1>
-          {subtitle && (
-            <p className="text-sm text-muted-foreground mt-0.5">{subtitle}</p>
-          )}
+      <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3 sm:py-4">
+        {/* Left: Hamburger (mobile) + Title */}
+        <div className="flex items-center gap-2 min-w-0">
+          <button
+            type="button"
+            onClick={onOpenMobileNav}
+            className="lg:hidden p-2 -ml-2 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+            aria-label="Open navigation"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold text-foreground truncate">{title}</h1>
+            {subtitle && (
+              <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 truncate">{subtitle}</p>
+            )}
+          </div>
         </div>
 
         {/* Right: Actions */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-4 shrink-0">
           {/* Search */}
           <div className="relative hidden md:block">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
               type="search"
               placeholder="Search merchants, orders..."
-              className="w-72 pl-10 bg-secondary/50 border-0 focus-visible:ring-1 focus-visible:ring-primary/30"
+              className="w-56 lg:w-72 pl-10 bg-secondary/50 border-0 focus-visible:ring-1 focus-visible:ring-primary/30"
             />
           </div>
 
