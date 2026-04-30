@@ -13,14 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { login } from "@/services/authService";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  ArrowRight,
-  Eye,
-  EyeOff,
-  Loader2,
-  ShieldCheck,
-  Sparkles,
-} from "lucide-react";
+import { ArrowRight, Eye, EyeOff, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { useLocation } from "wouter";
 
@@ -70,11 +63,17 @@ export default function Login() {
           }}
         />
 
-        {/* Brand mark */}
+        {/* Brand mark — cream variant from the brand kit since the
+            panel background is dark navy. */}
         <div className="relative flex items-center gap-3">
-          <div className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-white/10 backdrop-blur-sm border border-white/10">
-            <ShieldCheck className="h-5 w-5 text-blue-300" />
-          </div>
+          <img
+            src="/brand/numu-cream.png"
+            alt="NUMU"
+            className="h-10 w-auto object-contain"
+            width="40"
+            height="40"
+            fetchPriority="high"
+          />
           <div>
             <p className="text-[11px] tracking-[0.28em] uppercase text-slate-400">
               NUMU
@@ -104,7 +103,6 @@ export default function Login() {
 
         {/* Footer line */}
         <div className="relative flex items-center gap-3 text-[11px] text-slate-400">
-          <Sparkles className="h-3.5 w-3.5 text-blue-300/70" />
           <span>&copy; 2026 numu</span>
           <span aria-hidden="true">·</span>
           <span>numueg.app</span>
@@ -112,33 +110,39 @@ export default function Login() {
       </div>
 
       {/* ── Form panel (right) ─────────────────────────────── */}
-      <div className="flex-1 flex items-center justify-center p-4 sm:p-6 lg:p-12">
+      <div className="flex-1 flex items-center justify-center px-4 py-8 sm:p-8 lg:p-12">
         <div className="w-full max-w-[420px]">
-          <div className="rounded-xl border border-border bg-card shadow-sm p-7 sm:p-9">
+          <div className="rounded-xl border border-border bg-card shadow-sm p-5 sm:p-7 md:p-9">
             {/* Mobile brand row — only shown when the side panel
-                is hidden. Keeps the page from feeling unbranded
-                on phones. */}
-            <div className="lg:hidden mb-6 flex items-center gap-2.5">
-              <div className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                <ShieldCheck className="h-4 w-4" />
-              </div>
-              <div>
-                <p className="text-[10px] tracking-[0.25em] uppercase text-muted-foreground">
+                is hidden. ``min-w-0`` on the text column lets the
+                long ``Admin Backoffice`` label truncate on narrow
+                phones rather than blow out the card layout. */}
+            <div className="lg:hidden mb-5 flex items-center gap-2.5">
+              <img
+                src="/brand/numu-navy.png"
+                alt="NUMU"
+                className="h-9 w-auto object-contain shrink-0"
+                width="36"
+                height="36"
+                fetchPriority="high"
+              />
+              <div className="min-w-0">
+                <p className="text-[10px] tracking-[0.25em] uppercase text-muted-foreground truncate">
                   NUMU
                 </p>
-                <p className="text-sm font-semibold tracking-tight">
+                <p className="text-sm font-semibold tracking-tight truncate">
                   Admin Backoffice
                 </p>
               </div>
             </div>
 
-            <p className="text-[11px] tracking-[0.28em] uppercase text-primary mb-3">
+            <p className="text-[11px] tracking-[0.28em] uppercase text-primary mb-2.5">
               § ADMIN ACCESS
             </p>
-            <h2 className="text-2xl font-bold tracking-tight text-foreground leading-tight">
+            <h2 className="text-[1.65rem] sm:text-2xl font-bold tracking-tight text-foreground leading-tight">
               Sign in
             </h2>
-            <p className="mt-1.5 text-sm text-muted-foreground mb-7">
+            <p className="mt-1.5 text-[13px] sm:text-sm text-muted-foreground mb-6">
               Use your platform-admin credentials. Need access? Reach
               out to an existing operator.
             </p>
@@ -218,7 +222,7 @@ export default function Login() {
             </form>
           </div>
 
-          <p className="mt-6 text-[11px] text-center text-muted-foreground">
+          <p className="mt-5 px-2 text-[11px] leading-relaxed text-center text-muted-foreground">
             Sessions last 7 days and refresh automatically while you work.
           </p>
         </div>
