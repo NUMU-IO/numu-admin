@@ -24,6 +24,7 @@ import Reconciliation from "./pages/Reconciliation";
 import BetaProgram from "./pages/BetaProgram";
 import PricingPlans from "./pages/PricingPlans";
 import MerchantHubNav from "./pages/MerchantHubNav";
+import Themes from "./pages/Themes";
 
 // Placeholder page for features not yet implemented
 function ComingSoon({ title }: { title: string }) {
@@ -124,6 +125,9 @@ function Router() {
       </Route>
       <Route path="/merchant-hub-nav">
         {() => <ProtectedRoute component={MerchantHubNav} />}
+      </Route>
+      <Route path="/themes">
+        {() => <ProtectedRoute component={Themes} />}
       </Route>
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
