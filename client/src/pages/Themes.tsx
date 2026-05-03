@@ -33,14 +33,16 @@ import { Switch } from "@/components/ui/switch";
 import { getLoginUrl } from "@/const";
 import {
   batchUpdateThemeAdminConfig,
+  clearThemePreview,
   listThemeAdminConfig,
+  uploadThemePreview,
   type RequiredPlan,
   type ThemeAdminConfigItem,
   type ThemeAdminConfigPatch,
 } from "@/services/themeAdminApi";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ImageOff, Loader2, Palette } from "lucide-react";
-import { useState } from "react";
+import { ImageOff, Loader2, Palette, Trash2, Upload } from "lucide-react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 
 const PLAN_OPTIONS: { value: RequiredPlan; label: string }[] = [
@@ -53,7 +55,13 @@ const PLAN_OPTIONS: { value: RequiredPlan; label: string }[] = [
 // Same convention as the backend's STOREFRONT_ASSETS_BASE_URL default.
 // Falls back to placeholder via <img onError> if the asset isn't deployed.
 const PREVIEW_BASE = "https://numueg.app";
-const previewUrlFor = (slug: string) => `${PREVIEW_BASE}/themes/${slug}/preview.png`;
+const fallbackPreviewUrl = (slug: string) =>
+  `${PREVIEW_BASE}/themes/${slug}/preview.png`;
+// Resolve the URL to display in the thumbnail: the admin-uploaded override
+// takes precedence; otherwise we try the convention path. Cache-busts on
+// override so a fresh upload renders without a hard reload.
+const previewUrlFor = (theme: ThemeAdminConfigItem) =>
+  theme.preview_image_url ?? fallbackPreviewUrl(theme.theme_slug);
 
 export default function Themes() {
   const { loading, isAuthenticated } = useAuth();
@@ -103,6 +111,55 @@ export default function Themes() {
     onError: (err) =>
       toast.error((err as Error).message || "Failed to save themes"),
   });
+
+  // Per-row upload tracker — keyed by slug so two uploads in flight don't
+  // share a spinner / get confused with each other.
+  const [uploadingSlug, setUploadingSlug] = useState<string | null>(null);
+
+  // Upload writes directly to the backend (no diff/save dance) — the file
+  // landing in object storage is the side effect, the row update is the
+  // confirmation. We sync both query data + draft so an in-progress edit
+  // session sees the new preview URL.
+  const uploadMutation = useMutation({
+    mutationFn: ({ slug, file }: { slug: string; file: File }) =>
+      uploadThemePreview(slug, file),
+    onMutate: ({ slug }) => {
+      setUploadingSlug(slug);
+    },
+    onSuccess: (saved) => {
+      mergeRow(saved);
+      toast.success(`${saved.name}: preview uploaded`);
+    },
+    onError: (err) =>
+      toast.error((err as Error).message || "Upload failed"),
+    onSettled: () => setUploadingSlug(null),
+  });
+
+  const clearMutation = useMutation({
+    mutationFn: (slug: string) => clearThemePreview(slug),
+    onMutate: (slug) => {
+      setUploadingSlug(slug);
+    },
+    onSuccess: (saved) => {
+      mergeRow(saved);
+      toast.success(`${saved.name}: preview cleared`);
+    },
+    onError: (err) =>
+      toast.error((err as Error).message || "Failed to clear preview"),
+    onSettled: () => setUploadingSlug(null),
+  });
+
+  // Merge a single updated row into both the canonical query cache and
+  // the local draft so unsaved flag edits are preserved.
+  const mergeRow = (saved: ThemeAdminConfigItem) => {
+    const merge = (list: ThemeAdminConfigItem[]) =>
+      list.map((t) => (t.theme_slug === saved.theme_slug ? saved : t));
+    queryClient.setQueryData<ThemeAdminConfigItem[]>(
+      ["admin-themes"],
+      (prev) => (prev ? merge(prev) : prev),
+    );
+    setDraft((prev) => (prev ? merge(prev) : prev));
+  };
 
   const handleSave = () => {
     if (!draft || !themesQuery.data) return;
@@ -201,6 +258,11 @@ export default function Themes() {
                     key={theme.theme_slug}
                     theme={theme}
                     onChange={setField}
+                    onUpload={(file) =>
+                      uploadMutation.mutate({ slug: theme.theme_slug, file })
+                    }
+                    onClear={() => clearMutation.mutate(theme.theme_slug)}
+                    isUploading={uploadingSlug === theme.theme_slug}
                   />
                 ))}
               </div>
@@ -219,26 +281,90 @@ interface ThemeRowProps {
     key: K,
     value: ThemeAdminConfigItem[K],
   ) => void;
+  onUpload: (file: File) => void;
+  onClear: () => void;
+  isUploading: boolean;
 }
 
-function ThemeRow({ theme, onChange }: ThemeRowProps) {
+function ThemeRow({
+  theme,
+  onChange,
+  onUpload,
+  onClear,
+  isUploading,
+}: ThemeRowProps) {
   const [imgFailed, setImgFailed] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  // Reset broken-image state whenever the URL changes (post-upload).
+  // Without this, an upload after an `onError` would leave the placeholder.
+  const previewUrl = previewUrlFor(theme);
+  const hasOverride = !!theme.preview_image_url;
+
+  const handlePick = () => fileInputRef.current?.click();
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    // Reset the input so picking the same file twice still fires onChange.
+    e.target.value = "";
+    if (f) {
+      setImgFailed(false);
+      onUpload(f);
+    }
+  };
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-[88px_1fr_auto] gap-4 py-4 items-center">
-      {/* Thumbnail */}
-      <div className="w-22 h-14 sm:w-22 sm:h-14 rounded-md overflow-hidden bg-muted border border-border/50 flex items-center justify-center">
-        {imgFailed ? (
-          <ImageOff className="w-5 h-5 text-muted-foreground" />
-        ) : (
-          <img
-            src={previewUrlFor(theme.theme_slug)}
-            alt={theme.name}
-            className="w-full h-full object-cover"
-            loading="lazy"
-            onError={() => setImgFailed(true)}
-          />
-        )}
+      {/* Thumbnail — click to upload */}
+      <div className="space-y-1.5">
+        <button
+          type="button"
+          onClick={handlePick}
+          disabled={isUploading}
+          aria-label={`Upload preview for ${theme.name}`}
+          className="group relative w-22 h-14 sm:w-22 sm:h-14 rounded-md overflow-hidden bg-muted border border-border/50 flex items-center justify-center cursor-pointer hover:border-primary/40 transition-colors disabled:opacity-60 disabled:cursor-wait"
+        >
+          {imgFailed ? (
+            <ImageOff className="w-5 h-5 text-muted-foreground" />
+          ) : (
+            <img
+              key={previewUrl}
+              src={previewUrl}
+              alt={theme.name}
+              className="w-full h-full object-cover"
+              loading="lazy"
+              onError={() => setImgFailed(true)}
+            />
+          )}
+          {/* Hover overlay — visible on focus too for keyboard users */}
+          <span className="absolute inset-0 bg-foreground/55 text-background flex items-center justify-center gap-1 text-[10px] font-medium opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity">
+            {isUploading ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <>
+                <Upload className="w-3 h-3" />
+                Upload
+              </>
+            )}
+          </span>
+        </button>
+        {hasOverride ? (
+          <button
+            type="button"
+            onClick={onClear}
+            disabled={isUploading}
+            className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
+          >
+            <Trash2 className="w-3 h-3" />
+            Clear
+          </button>
+        ) : null}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          className="hidden"
+          aria-label={`Upload preview screenshot for ${theme.name}`}
+          onChange={handleFile}
+        />
       </div>
 
       {/* Name + slug + ar */}
@@ -251,6 +377,11 @@ function ThemeRow({ theme, onChange }: ThemeRowProps) {
           {!theme.is_visible ? (
             <Badge variant="outline" className="text-muted-foreground">
               Hidden
+            </Badge>
+          ) : null}
+          {hasOverride ? (
+            <Badge variant="outline" className="text-emerald-700 border-emerald-500/30 bg-emerald-500/5 text-[10px]">
+              Custom preview
             </Badge>
           ) : null}
         </div>
