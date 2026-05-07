@@ -9,6 +9,8 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import { useAuth } from "./_core/hooks/useAuth";
 import { getLoginUrl } from "./const";
 import Customers from "./pages/Customers";
+import EmailTemplateEditor from "./pages/EmailTemplateEditor";
+import EmailTemplates from "./pages/EmailTemplates";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Merchants from "./pages/Merchants";
@@ -107,6 +109,21 @@ function Router() {
       </Route>
       <Route path="/merchant-hub-nav">
         {() => <ProtectedRoute component={MerchantHubNav} />}
+      </Route>
+      <Route path="/email-templates">
+        {() => <ProtectedRoute component={EmailTemplates} />}
+      </Route>
+      <Route path="/email-templates/:eventType/:language">
+        {(params) => (
+          <ProtectedRoute
+            component={() => (
+              <EmailTemplateEditor
+                eventType={params.eventType}
+                language={(params.language === "ar" ? "ar" : "en") as "en" | "ar"}
+              />
+            )}
+          />
+        )}
       </Route>
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />

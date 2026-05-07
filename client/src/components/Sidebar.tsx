@@ -15,6 +15,7 @@ import {
   Globe,
   Home,
   LogOut,
+  Mail,
   Menu,
   Scale,
   Settings,
@@ -51,6 +52,7 @@ const secondaryNavItems: NavItem[] = [
   { icon: FileText, label: "Reports", href: "/reports" },
   { icon: Menu, label: "Merchant Hub Nav", href: "/merchant-hub-nav" },
   { icon: Settings, label: "Settings", href: "/settings" },
+  { icon: Mail, label: "Email Templates", href: "/email-templates" },
 ];
 
 export default function Sidebar() {
