@@ -6,7 +6,7 @@
  * attached to every state-changing request via the X-CSRF-Token header.
  */
 
-const API_BASE = import.meta.env.VITE_API_URL || "/api/v1";
+import { getApiBase } from "./env";
 
 let csrfToken: string | null = null;
 let pending: Promise<void> | null = null;
@@ -20,7 +20,7 @@ export async function initCSRF(): Promise<void> {
 
 async function doInitCSRF(): Promise<void> {
   try {
-    const res = await fetch(`${API_BASE}/auth/csrf-token`, {
+    const res = await fetch(`${getApiBase()}/auth/csrf-token`, {
       credentials: "include",
     });
     if (res.ok) {

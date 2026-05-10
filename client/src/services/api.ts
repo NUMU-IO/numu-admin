@@ -18,12 +18,7 @@
 
 import { getCSRFToken, initCSRF } from "./csrf";
 
-if (!import.meta.env.VITE_API_URL) {
-  throw new Error(
-    "VITE_API_URL is not set. Refusing to start without a configured API endpoint."
-  );
-}
-const API_BASE = import.meta.env.VITE_API_URL;
+import { getApiBase } from "@/lib/env";
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS", "TRACE"]);
 
@@ -54,7 +49,7 @@ async function rawFetch(
     }
   }
 
-  return fetch(`${API_BASE}${endpoint}`, {
+  return fetch(`${getApiBase()}${endpoint}`, {
     ...options,
     credentials: "include",
     headers: {
