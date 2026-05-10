@@ -4,7 +4,7 @@
  * CSRF token is fetched after login so subsequent requests pass validation.
  */
 
-import { apiClient, API_BASE } from "@/lib/apiClient";
+import { apiClient, getApiBase } from "@/lib/apiClient";
 import { initCSRF, clearCSRFToken } from "@/lib/csrf";
 
 export interface AdminUser {
@@ -63,7 +63,8 @@ export async function login(
   email: string,
   password: string,
 ): Promise<AdminUser> {
-  const res = await fetch(`${API_BASE}/admin/auth/login`, {
+  // Use raw fetch (not apiClient) because this runs before CSRF token exists
+  const res = await fetch(`${getApiBase()}/admin/auth/login`, {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
@@ -81,7 +82,8 @@ export async function login(
   // Server-side already gated on SUPER_ADMIN, but double-check here so a
   // stale response from a mocked backend can't sneak through.
   if (user.role !== "super_admin" && user.role !== "admin") {
-    await fetch(`${API_BASE}/admin/auth/logout`, {
+    // Logout since we set cookies for a non-admin user
+    await fetch(`${getApiBase()}/admin/auth/logout`, {
       method: "POST",
       credentials: "include",
     }).catch(() => {});
@@ -93,7 +95,7 @@ export async function login(
 }
 
 export async function logout(): Promise<void> {
-  await fetch(`${API_BASE}/admin/auth/logout`, {
+  await fetch(`${getApiBase()}/admin/auth/logout`, {
     method: "POST",
     credentials: "include",
   }).catch(() => {});
@@ -106,18 +108,18 @@ export async function getMe(): Promise<AdminUser> {
   // signed in instead of bouncing to OAuth. The refresh is
   // server-side sliding (a successful POST mints a fresh 7-day
   // refresh cookie too), so an active user never hits the wall.
-  let res = await fetch(`${API_BASE}/admin/auth/me`, {
+  let res = await fetch(`${getApiBase()}/admin/auth/me`, {
     credentials: "include",
     headers: { "Content-Type": "application/json" },
   });
 
   if (res.status === 401) {
-    const refresh = await fetch(`${API_BASE}/admin/auth/refresh`, {
+    const refresh = await fetch(`${getApiBase()}/admin/auth/refresh`, {
       method: "POST",
       credentials: "include",
     });
     if (refresh.ok) {
-      res = await fetch(`${API_BASE}/admin/auth/me`, {
+      res = await fetch(`${getApiBase()}/admin/auth/me`, {
         credentials: "include",
         headers: { "Content-Type": "application/json" },
       });

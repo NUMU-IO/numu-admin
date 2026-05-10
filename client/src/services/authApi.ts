@@ -5,13 +5,7 @@
  */
 
 import { initCSRF, clearCSRFToken } from "./csrf";
-
-if (!import.meta.env.VITE_API_URL) {
-  throw new Error(
-    "VITE_API_URL is not set. Refusing to start without a configured API endpoint."
-  );
-}
-const API_BASE = import.meta.env.VITE_API_URL;
+import { getApiBase } from "@/lib/env";
 
 export interface AdminUser {
   id: string;
@@ -36,7 +30,7 @@ export async function login(
   email: string,
   password: string
 ): Promise<AuthResponse> {
-  const res = await fetch(`${API_BASE}/admin/auth/login`, {
+  const res = await fetch(`${getApiBase()}/admin/auth/login`, {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
@@ -57,7 +51,7 @@ export async function login(
 }
 
 export async function logout(): Promise<void> {
-  await fetch(`${API_BASE}/admin/auth/logout`, {
+  await fetch(`${getApiBase()}/admin/auth/logout`, {
     method: "POST",
     credentials: "include",
   });
@@ -70,18 +64,18 @@ export async function getMe(): Promise<AdminUser> {
   // refresh before declaring the user unauthenticated, so a tab that
   // returns from idle inside the 7-day refresh window seamlessly
   // re-authenticates instead of bouncing the user to the OAuth portal.
-  let res = await fetch(`${API_BASE}/admin/auth/me`, {
+  let res = await fetch(`${getApiBase()}/admin/auth/me`, {
     credentials: "include",
     headers: { "Content-Type": "application/json" },
   });
 
   if (res.status === 401) {
-    const refresh = await fetch(`${API_BASE}/admin/auth/refresh`, {
+    const refresh = await fetch(`${getApiBase()}/admin/auth/refresh`, {
       method: "POST",
       credentials: "include",
     });
     if (refresh.ok) {
-      res = await fetch(`${API_BASE}/admin/auth/me`, {
+      res = await fetch(`${getApiBase()}/admin/auth/me`, {
         credentials: "include",
         headers: { "Content-Type": "application/json" },
       });
