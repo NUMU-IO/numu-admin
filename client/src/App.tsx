@@ -99,21 +99,6 @@ function Router() {
       <Route path="/settings">
         {() => <ProtectedRoute component={Settings} />}
       </Route>
-      <Route path="/email-templates">
-        {() => <ProtectedRoute component={EmailTemplates} />}
-      </Route>
-      <Route path="/email-templates/:eventType/:language">
-        {(params) => (
-          <ProtectedRoute
-            component={() => (
-              <EmailTemplateEditor
-                eventType={params.eventType}
-                language={params.language === "ar" ? "ar" : "en"}
-              />
-            )}
-          />
-        )}
-      </Route>
       <Route path="/landing-page">
         {() => <ProtectedRoute component={LandingPage} />}
       </Route>
@@ -125,6 +110,21 @@ function Router() {
       </Route>
       <Route path="/merchant-hub-nav">
         {() => <ProtectedRoute component={MerchantHubNav} />}
+      </Route>
+      <Route path="/email-templates">
+        {() => <ProtectedRoute component={EmailTemplates} />}
+      </Route>
+      <Route path="/email-templates/:eventType/:language">
+        {(params) => (
+          <ProtectedRoute
+            component={() => (
+              <EmailTemplateEditor
+                eventType={params.eventType}
+                language={(params.language === "ar" ? "ar" : "en") as "en" | "ar"}
+              />
+            )}
+          />
+        )}
       </Route>
       <Route path="/themes">
         {() => <ProtectedRoute component={Themes} />}

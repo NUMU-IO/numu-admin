@@ -56,6 +56,7 @@ const secondaryNavItems: NavItem[] = [
   { icon: Menu, label: "Merchant Hub Nav", href: "/merchant-hub-nav" },
   { icon: Mail, label: "Email Templates", href: "/email-templates" },
   { icon: Settings, label: "Settings", href: "/settings" },
+  { icon: Mail, label: "Email Templates", href: "/email-templates" },
 ];
 
 interface SidebarProps {

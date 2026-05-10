@@ -8,8 +8,7 @@
  */
 
 import { getCSRFToken, initCSRF } from "./csrf";
-
-const API_BASE = import.meta.env.VITE_API_URL || "/api/v1";
+import { getApiBase } from "./env";
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS", "TRACE"]);
 
@@ -28,7 +27,7 @@ async function rawFetch(
     }
   }
 
-  return fetch(`${API_BASE}${endpoint}`, {
+  return fetch(`${getApiBase()}${endpoint}`, {
     ...options,
     credentials: "include",
     headers: {
@@ -76,4 +75,6 @@ export async function apiClient<T>(
   return json.data;
 }
 
-export { API_BASE };
+// Re-exported so other services can build absolute URLs against the
+// currently-selected env (used in authService for /auth endpoints).
+export { getApiBase };
