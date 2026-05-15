@@ -28,9 +28,9 @@ import {
   Legend,
 } from "recharts";
 import {
-  BarChart3,
   Building2,
   DollarSign,
+  Repeat,
   ShoppingCart,
   Users,
   TrendingUp,
@@ -46,6 +46,15 @@ function formatCurrency(cents: number) {
     maximumFractionDigits: 0,
     notation: cents >= 1_000_000_00 ? "compact" : "standard",
   }).format(cents / 100);
+}
+
+function formatEGP(piasters: number) {
+  return new Intl.NumberFormat("en-EG", {
+    style: "currency",
+    currency: "EGP",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(piasters / 100);
 }
 
 function formatNum(n: number) {
@@ -167,6 +176,38 @@ export default function Analytics() {
 
   return (
     <DashboardLayout title="Analytics" subtitle="Platform performance and growth metrics">
+      {/* MRR Highlight */}
+      <div className="dashboard-card mb-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Repeat className="w-4 h-4 text-emerald-600" />
+          <h3 className="text-sm font-semibold">Monthly Recurring Revenue (MRR)</h3>
+          <Badge className="bg-emerald-50 text-emerald-700 ml-auto">
+            {stats?.mrr.subscriberCount ?? 0} subscribers
+          </Badge>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="lg:col-span-1 flex flex-col justify-center">
+            <p className="text-3xl font-bold text-foreground">
+              {formatEGP(stats?.mrr.total ?? 0)}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">Total MRR</p>
+          </div>
+          <div className="lg:col-span-4 grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {[
+              { label: "Starter (Monthly)", value: stats?.mrr.starterMonthly ?? 0 },
+              { label: "Starter (Annual)", value: stats?.mrr.starterAnnual ?? 0 },
+              { label: "Pro (Monthly)", value: stats?.mrr.proMonthly ?? 0 },
+              { label: "Pro (Annual)", value: stats?.mrr.proAnnual ?? 0 },
+            ].map((item) => (
+              <div key={item.label} className="p-3 rounded-xl bg-muted/40">
+                <p className="text-lg font-bold text-foreground">{formatEGP(item.value)}</p>
+                <p className="text-xs text-muted-foreground">{item.label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatsCard

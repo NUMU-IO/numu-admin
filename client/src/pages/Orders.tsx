@@ -39,7 +39,7 @@ import {
 } from "@/components/ui/table";
 import { getLoginUrl } from "@/const";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getOrders, getOrderStats, updateOrderStatus } from "@/services/orderService";
+import { getOrders, getOrderStats, updateOrderStatus, deleteOrder } from "@/services/orderService";
 import {
   AlertCircle,
   CheckCircle,
@@ -50,6 +50,7 @@ import {
   Package,
   Search,
   ShoppingCart,
+  Trash2,
   Truck,
   XCircle,
 } from "lucide-react";
@@ -80,6 +81,8 @@ export default function Orders() {
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [showStatusDialog, setShowStatusDialog] = useState(false);
   const [newStatus, setNewStatus] = useState<string>("");
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [orderToDelete, setOrderToDelete] = useState<any>(null);
 
   const limit = 10;
 
@@ -118,6 +121,21 @@ export default function Orders() {
     },
     onError: () => {
       toast.error("Failed to update order status");
+    },
+  });
+
+  // Delete order mutation
+  const deleteMutation = useMutation({
+    mutationFn: (orderId: string) => deleteOrder(orderId),
+    onSuccess: () => {
+      toast.success("Order permanently deleted");
+      setShowDeleteDialog(false);
+      setOrderToDelete(null);
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    },
+    onError: () => {
+      toast.error("Failed to delete order");
     },
   });
 
@@ -322,17 +340,32 @@ export default function Orders() {
                       {new Date(order.createdAt).toLocaleDateString()}
                     </TableCell>
                     <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => {
-                          setSelectedOrder(order);
-                          setNewStatus(order.status);
-                          setShowStatusDialog(true);
-                        }}
-                      >
-                        <MoreHorizontal className="w-4 h-4" />
-                      </Button>
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title="Update status"
+                          onClick={() => {
+                            setSelectedOrder(order);
+                            setNewStatus(order.status);
+                            setShowStatusDialog(true);
+                          }}
+                        >
+                          <MoreHorizontal className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title="Delete order permanently"
+                          className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                          onClick={() => {
+                            setOrderToDelete(order);
+                            setShowDeleteDialog(true);
+                          }}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
@@ -404,6 +437,56 @@ export default function Orders() {
               disabled={updateStatusMutation.isPending}
             >
               {updateStatusMutation.isPending ? "Updating..." : "Update Status"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-red-600">Delete Order Permanently</DialogTitle>
+            <DialogDescription>
+              This will permanently delete order{" "}
+              <span className="font-mono font-semibold">
+                #{orderToDelete?.orderId?.substring(0, 8)}
+              </span>{" "}
+              and all its related records (activities, shipments, refunds, payment proofs).
+              This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+              <p className="font-medium">
+                {orderToDelete?.customerName || "Guest"} &mdash;{" "}
+                {formatCurrency(orderToDelete?.total ?? 0, orderToDelete?.currency ?? "USD")}
+              </p>
+              <p className="text-xs mt-1 text-red-600">
+                Status: {orderToDelete?.status} | Payment: {orderToDelete?.paymentStatus}
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowDeleteDialog(false);
+                setOrderToDelete(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (orderToDelete) {
+                  deleteMutation.mutate(orderToDelete.orderId);
+                }
+              }}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? "Deleting..." : "Delete Forever"}
             </Button>
           </DialogFooter>
         </DialogContent>

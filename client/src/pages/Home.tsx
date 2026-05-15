@@ -30,6 +30,7 @@ import {
   Clock,
   DollarSign,
   Package,
+  Repeat,
   ShoppingCart,
   Store,
   TrendingUp,
@@ -103,6 +104,14 @@ export default function Home() {
       maximumFractionDigits: 0,
     }).format(cents / 100);
 
+  const formatEGP = (piasters: number) =>
+    new Intl.NumberFormat("en-EG", {
+      style: "currency",
+      currency: "EGP",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(piasters / 100);
+
   const formatNumber = (num: number) =>
     new Intl.NumberFormat("en-US").format(num);
 
@@ -125,15 +134,23 @@ export default function Home() {
       subtitle={`Welcome back, ${user?.name || "Admin"}! Here's what's happening with your platform today.`}
     >
       {/* Top Stats Row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+        <StatsCard
+          title="MRR"
+          value={statsLoading ? "..." : formatEGP(dashboardStats?.mrr.total ?? 0)}
+          changeLabel={`${dashboardStats?.mrr.subscriberCount ?? 0} subscribers`}
+          icon={Repeat}
+          iconColor="text-emerald-600"
+          iconBg="bg-emerald-50"
+        />
         <StatsCard
           title="Total Revenue"
           value={statsLoading ? "..." : formatCurrency(dashboardStats?.totalRevenue ?? 0)}
           change={dashboardStats?.revenueChange}
           changeLabel="vs last month"
           icon={DollarSign}
-          iconColor="text-emerald-600"
-          iconBg="bg-emerald-50"
+          iconColor="text-teal-600"
+          iconBg="bg-teal-50"
         />
         <StatsCard
           title="Active Merchants"
