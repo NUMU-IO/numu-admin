@@ -1,7 +1,7 @@
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import path from "node:path";
-import { defineConfig, type Plugin } from "vite";
+import { defineConfig, loadEnv, type Plugin } from "vite";
 
 /**
  * Injects Content-Security-Policy meta tag only in production builds.
@@ -37,7 +37,17 @@ function vitePluginCSP(): Plugin {
   };
 }
 
-export default defineConfig(({ mode }) => ({
+export default defineConfig(({ mode }) => {
+  // Load env from .env / .env.local / .env.<mode> with no prefix filter
+  // so non-`VITE_` vars (like NUMU_API_PROXY_TARGET, used by the dev
+  // server's proxy below) are available in the config. Without this,
+  // `process.env.X` only sees vars set in the shell at Vite start
+  // time — `.env.local` is silently ignored, leaving the proxy stuck
+  // on its production default.
+  const env = loadEnv(mode, path.resolve(import.meta.dirname), "");
+  const apiProxyTarget = env.NUMU_API_PROXY_TARGET || "https://numueg.app";
+
+  return ({
   plugins: [react(), tailwindcss(), vitePluginCSP()],
   resolve: {
     alias: {
@@ -62,7 +72,12 @@ export default defineConfig(({ mode }) => ({
     ],
     proxy: {
       "/api": {
-        target: "https://numueg.app",
+        // Override with NUMU_API_PROXY_TARGET in .env.local for local dev
+        // (e.g. NUMU_API_PROXY_TARGET=http://localhost:8021). Defaults to
+        // production so a fresh checkout works against staging without
+        // any local API running. Read via loadEnv() above (Vite doesn't
+        // auto-populate non-`VITE_` vars into process.env).
+        target: apiProxyTarget,
         changeOrigin: true,
         cookieDomainRewrite: "",
         secure: false,
@@ -127,4 +142,5 @@ export default defineConfig(({ mode }) => ({
     drop: mode === "production" ? ["debugger"] : [],
     pure: mode === "production" ? ["console.log", "console.debug", "console.info"] : [],
   },
-}));
+  });
+});

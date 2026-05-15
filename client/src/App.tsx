@@ -25,6 +25,7 @@ import BetaProgram from "./pages/BetaProgram";
 import PricingPlans from "./pages/PricingPlans";
 import MerchantHubNav from "./pages/MerchantHubNav";
 import Themes from "./pages/Themes";
+import MarketplaceReviews from "./pages/MarketplaceReviews";
 
 // Placeholder page for features not yet implemented
 function ComingSoon({ title }: { title: string }) {
@@ -128,6 +129,9 @@ function Router() {
       </Route>
       <Route path="/themes">
         {() => <ProtectedRoute component={Themes} />}
+      </Route>
+      <Route path="/marketplace-reviews">
+        {() => <ProtectedRoute component={MarketplaceReviews} />}
       </Route>
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />

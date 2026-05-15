@@ -3,14 +3,36 @@
  * Authentication is handled via httpOnly cookies set by the NUMU-api.
  * CSRF protection: token is stored in memory and sent as X-CSRF-Token
  * on every state-changing request (POST, PUT, PATCH, DELETE).
- * On 401, redirects to login page.
- * On 403 with CSRF failure, refreshes the token and retries once.
+ * On 401, attempts a silent token refresh via the refresh cookie
+ * (valid for 7 days) and retries the original request once. Only
+ * redirects to /login if the refresh itself fails.
+ * On 403 with CSRF failure, refreshes the CSRF token and retries once.
  */
 
 import { getCSRFToken, initCSRF } from "./csrf";
 import { getApiBase } from "./env";
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS", "TRACE"]);
+
+// Singleton refresh promise so concurrent 401s don't fire multiple
+// refresh requests — the first one wins and the rest piggy-back.
+let refreshPromise: Promise<boolean> | null = null;
+
+async function tryRefresh(): Promise<boolean> {
+  if (refreshPromise) return refreshPromise;
+
+  refreshPromise = fetch(`${API_BASE}/admin/auth/refresh`, {
+    method: "POST",
+    credentials: "include",
+  })
+    .then((r) => r.ok)
+    .catch(() => false)
+    .finally(() => {
+      refreshPromise = null;
+    });
+
+  return refreshPromise;
+}
 
 async function rawFetch(
   endpoint: string,
@@ -55,11 +77,21 @@ export async function apiClient<T>(
     }
   }
 
+  // Handle expired access token: silently refresh and retry once.
+  // The refresh cookie is valid for 7 days (sliding), so active
+  // users should never be bounced to the login page.
   if (res.status === 401) {
-    if (window.location.pathname !== "/login") {
-      window.location.href = "/login";
+    const refreshed = await tryRefresh();
+    if (refreshed) {
+      res = await rawFetch(endpoint, options);
     }
-    throw new Error("Session expired. Please log in again.");
+
+    if (res.status === 401) {
+      if (window.location.pathname !== "/login") {
+        window.location.href = "/login";
+      }
+      throw new Error("Session expired. Please log in again.");
+    }
   }
 
   if (!res.ok) {

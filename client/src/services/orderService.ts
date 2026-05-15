@@ -127,3 +127,9 @@ export async function updateOrderStatus(
     body: JSON.stringify({ status }),
   });
 }
+
+export async function deleteOrder(orderId: string): Promise<void> {
+  await apiClient(`/admin/orders/${orderId}`, {
+    method: "DELETE",
+  });
+}

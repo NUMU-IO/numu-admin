@@ -7,11 +7,14 @@ import { apiClient } from "@/lib/apiClient";
 export interface Merchant {
   id: number;
   merchantId: string;
+  tenantId: string | null;
   name: string;
   email: string;
   domain: string | null;
   logoUrl: string | null;
   plan: string;
+  lifecycleState: string | null;
+  isInternal: boolean;
   status: "active" | "pending_approval" | "suspended" | "inactive";
   totalRevenue: number | null;
   totalOrders: number | null;
@@ -20,6 +23,7 @@ export interface Merchant {
 
 interface ApiStoreItem {
   id: string;
+  tenant_id: string | null;
   name: string;
   slug: string;
   subdomain: string | null;
@@ -29,6 +33,8 @@ interface ApiStoreItem {
   owner_name: string | null;
   owner_email: string | null;
   plan: string | null;
+  lifecycle_state: string | null;
+  is_internal: boolean;
   logo_url: string | null;
   total_revenue: number;
   total_orders: number;
@@ -47,11 +53,14 @@ function mapStore(store: ApiStoreItem, index: number, pageOffset: number): Merch
   return {
     id: pageOffset + index + 1,
     merchantId: store.id,
+    tenantId: store.tenant_id,
     name: store.name,
     email: store.owner_email || `contact@${store.subdomain || store.slug}.com`,
     domain: store.subdomain ? `${store.subdomain}.numueg.app` : null,
     logoUrl: store.logo_url,
     plan: store.plan || "free",
+    lifecycleState: store.lifecycle_state,
+    isInternal: store.is_internal ?? false,
     status: store.status as Merchant["status"],
     totalRevenue: store.total_revenue ?? 0,
     totalOrders: store.total_orders ?? 0,
@@ -141,6 +150,16 @@ export interface AdminOcrProviderResponse {
   store_id: string;
   /** Null when set to ``"none"``; otherwise the resolved provider key. */
   provider: string | null;
+}
+
+export async function toggleMerchantInternal(
+  merchantId: string,
+  isInternal: boolean,
+): Promise<{ store_id: string; tenant_id: string; is_internal: boolean }> {
+  return apiClient(`/admin/stores/${merchantId}/internal`, {
+    method: "PATCH",
+    body: JSON.stringify({ is_internal: isInternal }),
+  });
 }
 
 export async function setInstapayOcrProvider(

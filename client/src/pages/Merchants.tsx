@@ -46,6 +46,7 @@ import {
   updateMerchantStatus,
   impersonateMerchant,
   setInstapayOcrProvider,
+  toggleMerchantInternal,
   type InstapayOcrProvider,
 } from "@/services/merchantService";
 import {
@@ -54,6 +55,7 @@ import {
   ChevronRight,
   Clock,
   ExternalLink,
+  FlaskConical,
   LogIn,
   MoreHorizontal,
   ScanText,
@@ -173,6 +175,24 @@ export default function Merchants() {
     },
     onError: (err) => {
       toast.error((err as Error).message || "Failed to update OCR provider");
+    },
+  });
+
+  // Toggle internal (test/sandbox) flag on the merchant's tenant
+  const toggleInternalMutation = useMutation({
+    mutationFn: ({ merchantId, isInternal }: { merchantId: string; isInternal: boolean }) =>
+      toggleMerchantInternal(merchantId, isInternal),
+    onSuccess: (_data, variables) => {
+      toast.success(
+        variables.isInternal
+          ? "Merchant marked as internal — excluded from analytics"
+          : "Merchant marked as real — included in analytics",
+      );
+      queryClient.invalidateQueries({ queryKey: ["merchants"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    },
+    onError: () => {
+      toast.error("Failed to update internal flag");
     },
   });
 
@@ -349,7 +369,14 @@ export default function Merchants() {
                         </span>
                       </div>
                       <div>
-                        <p className="font-medium">{merchant.name}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium">{merchant.name}</p>
+                          {merchant.isInternal && (
+                            <Badge className="bg-orange-100 text-orange-700 text-[10px] px-1.5 py-0">
+                              Internal
+                            </Badge>
+                          )}
+                        </div>
                         <p className="text-sm text-muted-foreground">{merchant.email}</p>
                       </div>
                     </div>
@@ -388,6 +415,21 @@ export default function Merchants() {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center justify-end gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title={merchant.isInternal ? "Mark as real merchant" : "Mark as internal (test)"}
+                        onClick={() =>
+                          toggleInternalMutation.mutate({
+                            merchantId: merchant.merchantId,
+                            isInternal: !merchant.isInternal,
+                          })
+                        }
+                        disabled={toggleInternalMutation.isPending}
+                        className={merchant.isInternal ? "text-orange-600" : ""}
+                      >
+                        <FlaskConical className="w-4 h-4" />
+                      </Button>
                       <Button
                         variant="ghost"
                         size="icon"
