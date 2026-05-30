@@ -25,6 +25,11 @@ import BetaProgram from "./pages/BetaProgram";
 import PricingPlans from "./pages/PricingPlans";
 import MerchantHubNav from "./pages/MerchantHubNav";
 import Themes from "./pages/Themes";
+import MarketplaceReview from "./pages/MarketplaceReview";
+import ThemesPage from "./pages/marketplace/ThemesPage";
+import ThemeDetailPage from "./pages/marketplace/ThemeDetailPage";
+import StoreSnapshotsPage from "./pages/marketplace/StoreSnapshotsPage";
+import PlatformSettingsPage from "./pages/platform/SettingsPage";
 
 // Placeholder page for features not yet implemented
 function ComingSoon({ title }: { title: string }) {
@@ -129,10 +134,49 @@ function Router() {
       <Route path="/themes">
         {() => <ProtectedRoute component={Themes} />}
       </Route>
+      <Route path="/marketplace/review">
+        {() => <ProtectedRoute component={MarketplaceReview} />}
+      </Route>
+      <Route path="/marketplace/themes">
+        {() => <ProtectedRoute component={ThemesPage} />}
+      </Route>
+      <Route path="/marketplace/themes/:slug">
+        {() => <ProtectedRoute component={ThemeDetailPage} />}
+      </Route>
+      <Route path="/marketplace/snapshots/:storeId">
+        {() => <ProtectedRoute component={StoreSnapshotsPage} />}
+      </Route>
+      {/* Bare /marketplace/snapshots without a storeId — render the
+          page anyway so it can prompt the admin for a store. */}
+      <Route path="/marketplace/snapshots">
+        {() => <ProtectedRoute component={StoreSnapshotsPage} />}
+      </Route>
+      {/* Legacy URL — Session B renamed /marketplace/flags →
+          /marketplace/themes. Kept as a one-shot redirect so saved
+          bookmarks + admin runbook links don't 404. */}
+      <Route path="/marketplace/flags">
+        {() => <RedirectTo path="/marketplace/themes" />}
+      </Route>
+      <Route path="/platform/settings">
+        {() => <ProtectedRoute component={PlatformSettingsPage} />}
+      </Route>
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
   );
+}
+
+/**
+ * Tiny inline redirect helper. wouter ships `Redirect` only as a
+ * declarative component, so we use it via `useLocation` for explicit
+ * navigation. Keeps the route table readable.
+ */
+function RedirectTo({ path }: { path: string }) {
+  const [, navigate] = useLocation();
+  useEffect(() => {
+    navigate(path, { replace: true });
+  }, [navigate, path]);
+  return null;
 }
 
 function App() {

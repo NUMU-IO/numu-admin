@@ -19,9 +19,13 @@ import {
   Menu,
   Palette,
   Scale,
+  ServerCog,
   Settings,
+  ShieldCheck,
   ShoppingCart,
+  Star,
   Users,
+  History,
   Ticket,
   X,
   Zap,
@@ -50,13 +54,38 @@ const mainNavItems: NavItem[] = [
   { icon: Ticket, label: "Beta Program", href: "/beta-program" },
 ];
 
+// Session B — Marketplace section. Themes is the renamed
+// /marketplace/flags page (now /marketplace/themes); Review survives as-is.
+// Reviews + Snapshots are file 05 stretch goals deferred to Session C —
+// surfaced here as "coming soon" so the admin nav structure is stable
+// before those pages land.
+interface MarketplaceNavItem extends NavItem {
+  comingSoon?: boolean;
+}
+
+const marketplaceNavItems: MarketplaceNavItem[] = [
+  { icon: Palette, label: "Themes", href: "/marketplace/themes" },
+  { icon: ShieldCheck, label: "Review queue", href: "/marketplace/review" },
+  { icon: Star, label: "Reviews", href: "/marketplace/reviews", comingSoon: true },
+  // Session C — snapshots browser landed; un-grey. Defaults to the
+  // bare /marketplace/snapshots route which prompts the admin to pick
+  // a store. Future enhancement: a sub-page with a store selector.
+  { icon: History, label: "Snapshots", href: "/marketplace/snapshots" },
+];
+
+// Session B — Platform section. /platform/settings is the new
+// default-theme picker. Distinct from /settings (which targets the
+// `platform_settings` JSONB bag — branding, signups, auth policy).
+const platformNavItems: NavItem[] = [
+  { icon: ServerCog, label: "Settings", href: "/platform/settings" },
+];
+
 const secondaryNavItems: NavItem[] = [
   { icon: Scale, label: "Reconciliation", href: "/reconciliation" },
   { icon: FileText, label: "Reports", href: "/reports" },
   { icon: Menu, label: "Merchant Hub Nav", href: "/merchant-hub-nav" },
   { icon: Mail, label: "Email Templates", href: "/email-templates" },
   { icon: Settings, label: "Settings", href: "/settings" },
-  { icon: Mail, label: "Email Templates", href: "/email-templates" },
 ];
 
 interface SidebarProps {
@@ -174,6 +203,78 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
             </Link>
           );
         })}
+
+        <div className="pt-4">
+          <p className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+            Marketplace
+          </p>
+          {marketplaceNavItems.map((item) => {
+            // Active state honours nested paths so /marketplace/themes/anything
+            // stays highlighted under the Themes entry. Snapshots is also
+            // prefix-matched because the real URL takes a store_id.
+            const isActive =
+              location === item.href || location.startsWith(`${item.href}/`);
+            const node = (
+              <div
+                className={cn(
+                  "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200",
+                  item.comingSoon
+                    ? "text-muted-foreground/50 cursor-not-allowed"
+                    : isActive
+                      ? "bg-primary/10 text-primary font-medium"
+                      : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                )}
+              >
+                <item.icon
+                  className={cn(
+                    "w-5 h-5",
+                    !item.comingSoon && isActive && "text-primary",
+                  )}
+                />
+                <span className="text-sm">{item.label}</span>
+                {item.comingSoon && (
+                  <span className="ml-auto text-[10px] uppercase tracking-wider text-muted-foreground/60">
+                    soon
+                  </span>
+                )}
+              </div>
+            );
+            // Wrap clickable items in <Link>; coming-soon items render as
+            // plain divs (no navigation surface).
+            return item.comingSoon ? (
+              <div key={item.href}>{node}</div>
+            ) : (
+              <Link key={item.href} href={item.href}>
+                {node}
+              </Link>
+            );
+          })}
+        </div>
+
+        <div className="pt-4">
+          <p className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+            Platform
+          </p>
+          {platformNavItems.map((item) => {
+            const isActive =
+              location === item.href || location.startsWith(`${item.href}/`);
+            return (
+              <Link key={item.href} href={item.href}>
+                <div
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200",
+                    isActive
+                      ? "bg-primary/10 text-primary font-medium"
+                      : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                  )}
+                >
+                  <item.icon className={cn("w-5 h-5", isActive && "text-primary")} />
+                  <span className="text-sm">{item.label}</span>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
 
         <div className="pt-4">
           <p className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
