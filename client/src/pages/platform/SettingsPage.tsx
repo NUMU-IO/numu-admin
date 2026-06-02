@@ -45,12 +45,14 @@ import {
   listAdminThemes,
   type AdminThemeListItem,
 } from "@/services/marketplaceAdminApi";
+import { Switch } from "@/components/ui/switch";
 import {
   getPlatformConfig,
+  setAppEmbedsTabEnabled,
   setDefaultTheme,
 } from "@/services/platformConfigApi";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Loader2, Save } from "lucide-react";
+import { AlertTriangle, Loader2, Puzzle, Save } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -95,6 +97,22 @@ export default function PlatformSettingsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: PLATFORM_CONFIG_QUERY_KEY });
       toast.success("Platform default updated");
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : "Couldn't save");
+    },
+  });
+
+  // Phase 5.2 — App-embeds tab visibility toggle (platform-wide).
+  const appEmbedsMutation = useMutation({
+    mutationFn: (enabled: boolean) => setAppEmbedsTabEnabled(enabled),
+    onSuccess: (snap) => {
+      queryClient.invalidateQueries({ queryKey: PLATFORM_CONFIG_QUERY_KEY });
+      toast.success(
+        snap.app_embeds_tab_enabled
+          ? "App embeds tab enabled for merchants"
+          : "App embeds tab hidden from merchants",
+      );
     },
     onError: (err) => {
       toast.error(err instanceof Error ? err.message : "Couldn't save");
@@ -225,6 +243,43 @@ export default function PlatformSettingsPage() {
                 )}
                 Save
               </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Phase 5.2 — App-embeds tab toggle. Default OFF: the merchant
+            theme editor hides the "App embeds" tab until a first-party
+            app-embed platform exists, so it never shows a dead feature. */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Puzzle className="h-4 w-4" />
+              Theme editor — App embeds tab
+            </CardTitle>
+            <CardDescription>
+              Show the "App embeds" tab in every merchant's theme editor.
+              Keep this <strong>off</strong> until a first-party app-embed
+              platform ships — otherwise merchants see an empty "Coming
+              soon" tab. Affects the editor UI only; no store data changes.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between rounded-md border p-3">
+              <div className="text-sm">
+                <p className="font-medium">App embeds tab</p>
+                <p className="text-xs text-muted-foreground">
+                  {platformConfigQuery.data?.app_embeds_tab_enabled
+                    ? "Visible to merchants"
+                    : "Hidden from merchants (recommended)"}
+                </p>
+              </div>
+              <Switch
+                checked={Boolean(
+                  platformConfigQuery.data?.app_embeds_tab_enabled,
+                )}
+                disabled={appEmbedsMutation.isPending}
+                onCheckedChange={(v) => appEmbedsMutation.mutate(v)}
+              />
             </div>
           </CardContent>
         </Card>

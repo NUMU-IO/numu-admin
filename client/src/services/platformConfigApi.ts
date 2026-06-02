@@ -31,10 +31,27 @@ export interface DefaultThemeSummary {
 export interface PlatformConfigSnapshot {
   default_marketplace_theme_id: string | null;
   default_marketplace_theme: DefaultThemeSummary | null;
+  /** Phase 5.2 — whether the merchant editor shows the "App embeds" tab. */
+  app_embeds_tab_enabled: boolean;
 }
 
 export function getPlatformConfig(): Promise<PlatformConfigSnapshot> {
   return apiClient<PlatformConfigSnapshot>("/admin/platform-config");
+}
+
+/**
+ * Toggle the merchant theme editor's "App embeds" tab platform-wide.
+ * Default OFF — turn on only once a first-party app-embed platform exists.
+ * Flows to merchants via /auth/me feature_flags (`theme_app_embeds`).
+ */
+export function setAppEmbedsTabEnabled(
+  enabled: boolean,
+): Promise<PlatformConfigSnapshot> {
+  return apiClient<PlatformConfigSnapshot>("/admin/platform-config", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ app_embeds_tab_enabled: enabled }),
+  });
 }
 
 /**
