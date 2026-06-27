@@ -67,6 +67,7 @@ const DEFAULT_SETTINGS: PlatformSettings = {
   maintenance_mode: false,
   session_timeout_minutes: 60,
   max_login_attempts: 5,
+  assistant_enabled: true,
 };
 
 export default function Settings() {
@@ -360,6 +361,22 @@ export default function Settings() {
                       checked={platformSettings.maintenance_mode}
                       onCheckedChange={(checked) =>
                         setField("maintenance_mode", checked)
+                      }
+                      disabled={settingsQuery.isLoading}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label>AI Assistant widget</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Show the floating AI Assistant in every merchant's hub
+                      </p>
+                    </div>
+                    <Switch
+                      checked={platformSettings.assistant_enabled}
+                      onCheckedChange={(checked) =>
+                        setField("assistant_enabled", checked)
                       }
                       disabled={settingsQuery.isLoading}
                     />
