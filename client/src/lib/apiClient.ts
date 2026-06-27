@@ -21,7 +21,7 @@ let refreshPromise: Promise<boolean> | null = null;
 async function tryRefresh(): Promise<boolean> {
   if (refreshPromise) return refreshPromise;
 
-  refreshPromise = fetch(`${API_BASE}/admin/auth/refresh`, {
+  refreshPromise = fetch(`${getApiBase()}/admin/auth/refresh`, {
     method: "POST",
     credentials: "include",
   })

@@ -26,6 +26,7 @@ import {
   getMerchantHubNav,
   updateMerchantHubNav,
   TAB_LABELS,
+  TAB_PARENT,
   DEFAULT_TABS,
   type MerchantHubNavTab,
 } from "@/services/merchantHubNavApi";
@@ -167,14 +168,20 @@ export default function MerchantHubNav() {
               <TableBody>
                 {tabs.map((t, idx) => {
                   const label = TAB_LABELS[t.key];
+                  const isChild = !!TAB_PARENT[t.key];
                   return (
-                    <TableRow key={t.key}>
+                    <TableRow key={t.key} className={isChild ? "bg-muted/20" : ""}>
                       <TableCell className="text-muted-foreground tabular-nums">{idx + 1}</TableCell>
                       <TableCell>
-                        <div className="font-medium">{label?.en ?? t.key}</div>
-                        <div className="text-[11px] text-muted-foreground">
-                          key: <code className="font-mono">{t.key}</code>
-                          {label?.ar ? <span className="ms-2">· {label.ar}</span> : null}
+                        <div className={isChild ? "ps-6 border-s-2 border-muted" : ""}>
+                          <div className={isChild ? "font-normal text-sm" : "font-semibold"}>
+                            {isChild ? "↳ " : ""}
+                            {label?.en ?? t.key}
+                          </div>
+                          <div className="text-[11px] text-muted-foreground">
+                            key: <code className="font-mono">{t.key}</code>
+                            {label?.ar ? <span className="ms-2">· {label.ar}</span> : null}
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell>

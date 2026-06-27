@@ -35,7 +35,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { getLoginUrl } from "@/const";
 import {
-  listPendingReviews,
+  listPendingReviewItems,
   submitReviewDecision,
   type PendingReviewItem,
   type ReviewDecision,
@@ -492,7 +492,7 @@ export default function MarketplaceReviews() {
 
   const pendingQuery = useQuery({
     queryKey: ["marketplace-pending-reviews"],
-    queryFn: listPendingReviews,
+    queryFn: listPendingReviewItems,
     enabled: isAuthenticated,
     // The list is fast-changing (devs submit, admins act) — refetch on
     // window focus so an admin alt-tabbing back doesn't act on stale data.

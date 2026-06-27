@@ -2,7 +2,9 @@
 
 The internal **platform admin panel** for the NUMU e-commerce platform. Super-admins manage every merchant, order, and customer across the platform; scoped admins are limited to assigned merchants via RBAC.
 
-A full-stack tRPC application — React 19 client + Express tRPC server, with Drizzle ORM for local CRUD and a thin Axios layer that proxies to `NUMU-api` for the bulk of the data.
+A **pure Vite SPA** — React 19 client that talks directly to `NUMU-api` with cookie auth. There is no server in this repo.
+
+> **Architecture note (Mar 2026):** the previous Express + tRPC + Drizzle server layer was removed (`refactor: remove Express/tRPC server layer`, commit `37d30e8`). If you find docs or plan files referencing `server/`, `drizzle/`, tRPC routers, or `numuDataLayer.ts` — they are stale; this repo is client-only.
 
 ---
 
@@ -10,10 +12,10 @@ A full-stack tRPC application — React 19 client + Express tRPC server, with Dr
 
 - [System context](#system-context)
 - [Tech stack](#tech-stack)
-- [Application architecture](#application-architecture)
-- [Data access — dual strategy](#data-access--dual-strategy)
+- [API access](#api-access)
 - [Auth & RBAC](#auth--rbac)
-- [tRPC routers](#trpc-routers)
+- [Pages](#pages)
+- [Environment switcher](#environment-switcher)
 - [Project structure](#project-structure)
 - [Getting started](#getting-started)
 - [Environment variables](#environment-variables)
@@ -30,24 +32,20 @@ flowchart LR
   end
 
   subgraph Repo["numu-admin — this repo"]
-    C[React 19 SPA<br/>wouter routing]
-    S[Express + tRPC server]
-    L[(Drizzle / PostgreSQL<br/>admin_* tables)]
+    C[React 19 SPA<br/>wouter routing<br/>TanStack Query]
   end
 
   subgraph Backend["NUMU platform"]
-    NUMU[NUMU-api · FastAPI]
-    DB[(Tenant PostgreSQL)]
+    NUMU[NUMU-api · FastAPI<br/>/api/v1/admin/* + scoped routes]
+    DB[(PostgreSQL · RLS)]
   end
 
-  A -- httpOnly session --> C
-  C -- "tRPC over HTTP" --> S
-  S <--> L
-  S -- "REST · admin JWT" --> NUMU
+  A -- httpOnly admin cookies --> C
+  C -- "REST · fetch apiClient<br/>CSRF + auto-refresh" --> NUMU
   NUMU --> DB
 ```
 
-The admin app **does not** reach the merchant or storefront UIs directly — it talks to `NUMU-api` like any other client, plus its own local database for admin-only tables (user accounts, merchant assignments, audit metadata).
+The admin app talks to `NUMU-api` like any other client. All admin-only data (assignments, platform config, marketplace review state) lives in NUMU-api's database — this repo has **no database of its own**.
 
 ---
 
@@ -59,69 +57,25 @@ The admin app **does not** reach the merchant or storefront UIs directly — it 
 | Build | Vite 7 |
 | Styling | Tailwind CSS 4 · shadcn/ui · Radix |
 | Routing | **wouter** (~3.3 kB — *not* react-router-dom) |
+| Data fetching | TanStack React Query 5 + fetch `apiClient` |
 | Animation | Framer Motion |
-| Server | Express 4 + tRPC v11 |
-| Server transform | SuperJSON |
-| ORM | Drizzle (PostgreSQL) |
-| Auth | HS256 JWT + httpOnly session cookie + CSRF double-submit |
-| Package manager | pnpm |
+| Auth | httpOnly admin cookies + CSRF double-submit |
+| Package manager | npm (`pnpm-workspace.yaml` is a leftover — ignore) |
 
 ---
 
-## Application architecture
+## API access
 
-```mermaid
-flowchart TB
-  subgraph Client["client/ — React SPA"]
-    P[wouter Pages]
-    H[useAuth hook]
-    TQ[TanStack React Query]
-    TC[tRPC React client]
-  end
+Service modules in `client/src/services/` (authApi, adminApi, merchantService, orderService, customerService, emailTemplatesApi, marketplaceAdminApi, platformConfigApi, …) call a fetch-based `apiClient` that:
 
-  subgraph Server["server/ — Express + tRPC"]
-    EX[Express app]
-    AP[adminProcedure middleware]
-    R[appRouter]
-    NDL[numuDataLayer.ts]
-    NA[numuApi.ts · Axios]
-    DB[db.ts · Drizzle]
-  end
+- sends `credentials: "include"` (httpOnly cookies),
+- attaches the CSRF token on mutations and refreshes it on 403,
+- auto-refreshes the session on 401 with single-flight deduplication,
+- unwraps the `{data: T}` envelope.
 
-  subgraph Stores["Data stores"]
-    PG[(Local PostgreSQL<br/>admin_* tables)]
-    NUMU[(NUMU-api)]
-  end
+> Known duplication: `client/src/services/api.ts` and `client/src/lib/apiClient.ts` are ~95% identical fetch wrappers (filed as B-13 — unify when convenient).
 
-  P --> H
-  P --> TQ --> TC
-  TC --> EX
-  EX --> AP --> R
-  R --> NDL
-  R --> DB
-  NDL --> NA --> NUMU
-  DB --> PG
-```
-
----
-
-## Data access — dual strategy
-
-```mermaid
-flowchart LR
-  R[tRPC procedure] -->|primary| NDL[numuDataLayer.ts]
-  R -->|local CRUD only| DB[db.ts · Drizzle]
-
-  NDL -->|admin JWT<br/>refresh hourly| NA[numuApi · Axios]
-  NA --> NUMU[(NUMU-api · /admin/*)]
-
-  DB --> PG[(PostgreSQL · admin_* tables)]
-```
-
-| Source | Used for |
-|--------|----------|
-| `numuDataLayer.ts` *(primary)* | All merchant / order / customer / product reads + writes — proxied to `NUMU-api`. Handles admin-token storage and hourly refresh. Enforces tenant scope (super_admin sees all; admin sees only assigned merchants). |
-| `db.ts` *(local)* | Admin user accounts, merchant assignments, locally-managed CRUD that doesn't belong in the tenant DB. |
+In dev, the Vite proxy renames cookies `access_token` → `admin_access_token` so a local merchant-hub session on another port doesn't collide.
 
 ---
 
@@ -130,47 +84,41 @@ flowchart LR
 ```mermaid
 sequenceDiagram
     actor U as Admin
-    participant C as React client
-    participant S as Express + tRPC
+    participant C as React SPA
     participant NUMU as NUMU-api
 
-    U->>C: POST /login
-    C->>S: trpc.auth.login(email, password)
-    S->>NUMU: POST /auth/login
-    NUMU-->>S: JWT + role
-    S->>S: assert role ∈ {admin, super_admin}
-    S->>S: mint HS256 session JWT
-    S-->>C: Set-Cookie app_session_id (httpOnly)<br/>+ csrf_token (double-submit)
-    C-->>U: redirect to /
-
-    Note over S: every subsequent procedure runs adminProcedure:<br/>1. validate session 2. resolve allowedMerchantIds<br/>3. inject into ctx
+    U->>C: open /login
+    C->>NUMU: POST /api/v1/admin/auth/login
+    NUMU-->>C: Set-Cookie admin_access_token / admin_refresh_token (httpOnly)
+    C->>NUMU: GET /auth/csrf-token → kept in JS memory
+    C->>NUMU: subsequent requests (cookies + X-CSRF-Token)
+    Note over NUMU: role ∈ {admin, super_admin} enforced server-side;<br/>admins are scoped to assigned merchants
 ```
-
-**Sliding session.** If the session JWT is older than 1h on a request, the server quietly re-issues it.
-
-**RBAC scopes:**
 
 | Role | Scope |
 |------|-------|
-| `super_admin` | sees *all* merchants & data |
-| `admin` | sees only merchants in `admin_merchant_assignments` |
-
-Every `adminProcedure` injects `allowedMerchantIds` into context — downstream resolvers must filter on it.
+| `super_admin` | sees *all* merchants & data, platform settings |
+| `admin` | sees only assigned merchants |
 
 ---
 
-## tRPC routers
+## Pages
 
-```text
-appRouter
-├── auth          login → proxies to NUMU-api, mints session
-├── dashboard     stats · revenueByMonth · topMerchants · recentOrders
-├── merchants     list · getById · updateStatus · stats
-├── orders        list · getById · updateStatus · stats
-├── customers     list · stats
-├── products      list
-└── landingPage   getConfig · updateConfig
-```
+Routed with wouter in `client/src/App.tsx` (26 pages under `client/src/pages/`):
+
+| Area | Routes |
+|------|--------|
+| Core | `/login` · `/` home · `/merchants` · `/orders` · `/customers` · `/analytics` |
+| Money | `/billing` · `/reports` · `/reconciliation` |
+| Platform | `/settings` · `/platform/settings` · `/landing-page` · `/beta-program` · `/pricing-plans` · `/merchant-hub-nav` |
+| Comms | `/email-templates` · `/email-templates/:eventType/:language` |
+| Themes & marketplace | `/themes` · `/marketplace/review` · `/marketplace/themes` · `/marketplace/themes/:slug` · `/marketplace/snapshots[/:storeId]` |
+
+---
+
+## Environment switcher
+
+`client/src/lib/env.ts` provides a runtime switcher (prod / stage / test) so one deployed admin build can point at any NUMU environment. All service calls route through it.
 
 ---
 
@@ -182,22 +130,14 @@ numu-admin/
 │   ├── public/               # NUMU brand favicon set
 │   ├── index.html
 │   └── src/
-│       ├── pages/            # wouter-routed pages
+│       ├── pages/            # wouter-routed pages (incl. marketplace/, platform/)
 │       ├── components/       # UI components (shadcn/ui)
+│       ├── services/         # per-domain API modules
 │       ├── _core/hooks/      # useAuth + helpers
 │       ├── contexts/         # ThemeContext (light/dark)
-│       └── lib/              # utils · csrf
-├── server/
-│   ├── _core/                # Express bootstrap · tRPC setup · auth · CSRF · OAuth
-│   ├── routers.ts            # appRouter (auth, dashboard, merchants, …)
-│   ├── numuDataLayer.ts      # Primary data access via NUMU-api
-│   ├── numuApi.ts            # Axios client
-│   └── db.ts                 # Drizzle queries
-├── drizzle/
-│   └── schema.ts             # 7 admin_* tables
-├── shared/                   # Types shared between client + server
+│       └── lib/              # apiClient · env switcher · csrf · utils
 ├── components.json           # shadcn/ui registry
-├── vite.config.ts
+├── vite.config.ts            # dev server :5000 + /api proxy + cookie renaming
 └── package.json
 ```
 
@@ -207,21 +147,20 @@ numu-admin/
 
 ```bash
 # 1. Install dependencies
-pnpm install
+npm install
 
 # 2. Configure environment
-cp .env.example .env
+cp .env.example .env          # set VITE_API_URL
 
-# 3. Run migrations against local PostgreSQL
-pnpm db:push
+# 3. Start the dev server (port 5000)
+npm run dev
 
-# 4. Start the dev server (port 5000)
-pnpm dev
-
-# 5. Build + preview
-pnpm build
-pnpm start
+# 4. Build + preview
+npm run build
+npm run preview
 ```
+
+For a fully local stack, run NUMU-api on `:8001` and set `VITE_API_URL=http://127.0.0.1:8001/api/v1` (NUMU-api CORS allows `:5000`/`:5001`).
 
 ---
 
@@ -229,19 +168,16 @@ pnpm start
 
 | Variable | Description |
 |----------|-------------|
-| `NUMU_API_URL` | NUMU-api base URL (e.g. `http://localhost:8000/api/v1`) |
-| `NUMU_ADMIN_EMAIL` | Service account email used to fetch the long-lived admin JWT |
-| `NUMU_ADMIN_PASSWORD` | Service account password |
-| `DATABASE_URL` | PostgreSQL URL for the admin's local Drizzle schema |
-| `SESSION_SECRET` | HS256 signing secret for session JWT (32+ bytes) |
-| `VITE_ANALYTICS_ENDPOINT` | (optional) Umami analytics endpoint loaded at runtime |
+| `VITE_API_URL` | NUMU-api base URL incl. `/api/v1` (overrides the dev proxy) |
+
+Runtime environment selection (prod/stage/test) is handled in-app via the env switcher — no rebuild needed.
 
 ---
 
 ## Conventions
 
 - **wouter, not react-router.** Different API — read its docs before adding routes.
+- **No zod layer** — backend Pydantic validates; `apiClient` surfaces `detail` messages as thrown `Error`s. Mirror Pydantic schemas with hand-written TS types in the service module.
 - **Soft Minimalist design.** Warm off-white surfaces, soft shadows, indigo accents. Framer Motion for transitions.
 - **All money in cents** — divide by 100 before display.
-- **`adminProcedure` is mandatory.** Never expose data without the RBAC middleware applied.
-- **Path aliases:** `@/` → `client/src/` · `@shared/` → `shared/`.
+- **Path alias:** `@/` → `client/src/`.
