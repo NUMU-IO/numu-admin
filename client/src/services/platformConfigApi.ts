@@ -33,6 +33,9 @@ export interface PlatformConfigSnapshot {
   default_marketplace_theme: DefaultThemeSummary | null;
   /** Phase 5.2 — whether the merchant editor shows the "App embeds" tab. */
   app_embeds_tab_enabled: boolean;
+  /** Apple Pay master switch — when false, Apple Pay is hidden platform-wide
+   *  (per-store toggles are ignored at checkout). Default true. */
+  apple_pay_enabled: boolean;
 }
 
 export function getPlatformConfig(): Promise<PlatformConfigSnapshot> {
@@ -51,6 +54,20 @@ export function setAppEmbedsTabEnabled(
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ app_embeds_tab_enabled: enabled }),
+  });
+}
+
+/**
+ * Apple Pay master switch. When off, Apple Pay is hidden across every
+ * storefront regardless of per-store settings (kill switch). Default on.
+ */
+export function setApplePayEnabled(
+  enabled: boolean,
+): Promise<PlatformConfigSnapshot> {
+  return apiClient<PlatformConfigSnapshot>("/admin/platform-config", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ apple_pay_enabled: enabled }),
   });
 }
 

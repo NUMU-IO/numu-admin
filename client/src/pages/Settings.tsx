@@ -841,10 +841,6 @@ export default function Settings() {
                   <Input
                     id="metaAppId"
                     placeholder="Enter your Meta App ID"
-                    value={platformSettings.platformName}
-                    onChange={(e) =>
-                      setPlatformSettings((s) => ({ ...s, platformName: e.target.value }))
-                    }
                   />
                 </div>
                 <div className="space-y-2">
