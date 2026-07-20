@@ -31,6 +31,7 @@ import ThemesPage from "./pages/marketplace/ThemesPage";
 import ThemeDetailPage from "./pages/marketplace/ThemeDetailPage";
 import StoreSnapshotsPage from "./pages/marketplace/StoreSnapshotsPage";
 import PlatformSettingsPage from "./pages/platform/SettingsPage";
+import CapabilitiesPage from "./pages/platform/CapabilitiesPage";
 
 // Placeholder page for features not yet implemented
 function ComingSoon({ title }: { title: string }) {
@@ -163,6 +164,11 @@ function Router() {
       </Route>
       <Route path="/platform/settings">
         {() => <ProtectedRoute component={PlatformSettingsPage} />}
+      </Route>
+      {/* Capability registry — the control plane for what may extend NUMU
+          (ADR-0 / ADR-6). Sits next to /platform/settings under Platform. */}
+      <Route path="/platform/capabilities">
+        {() => <ProtectedRoute component={CapabilitiesPage} />}
       </Route>
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />

@@ -14,6 +14,7 @@ import {
   FileText,
   Globe,
   Home,
+  KeyRound,
   LogOut,
   Mail,
   Menu,
@@ -80,6 +81,9 @@ const marketplaceNavItems: MarketplaceNavItem[] = [
 // `platform_settings` JSONB bag — branding, signups, auth policy).
 const platformNavItems: NavItem[] = [
   { icon: ServerCog, label: "Settings", href: "/platform/settings" },
+  // Capability registry (ADR-0 / ADR-6) — the control plane for what may
+  // extend NUMU, including the platform-wide kill switch.
+  { icon: KeyRound, label: "Capabilities", href: "/platform/capabilities" },
 ];
 
 const secondaryNavItems: NavItem[] = [
