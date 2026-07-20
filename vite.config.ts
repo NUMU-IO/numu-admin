@@ -37,6 +37,23 @@ function vitePluginCSP(): Plugin {
   };
 }
 
+/**
+ * Where the dev server proxies `/api` to.
+ *
+ * This used to be hardcoded to `https://numueg.app` — i.e. **production**.
+ * Running `npm run dev` on this repo therefore pointed the whole admin
+ * backoffice at the live platform: every list, every edit, and every
+ * destructive action (suspend a capability platform-wide, approve a theme,
+ * refund a purchase) executed against production data from `localhost:5000`,
+ * with nothing in the UI saying so. There is no test/staging stack any more,
+ * so an accidental prod write has no safety net.
+ *
+ * Default is now the LOCAL API. Pointing at a remote host has to be a
+ * deliberate, visible act: `ADMIN_API_PROXY_TARGET=https://numueg.app npm run dev`.
+ */
+const API_PROXY_TARGET =
+  process.env.ADMIN_API_PROXY_TARGET ?? "http://127.0.0.1:8001";
+
 export default defineConfig(({ mode }) => ({
   plugins: [react(), tailwindcss(), vitePluginCSP()],
   resolve: {
@@ -62,7 +79,7 @@ export default defineConfig(({ mode }) => ({
     ],
     proxy: {
       "/api": {
-        target: "https://numueg.app",
+        target: API_PROXY_TARGET,
         changeOrigin: true,
         cookieDomainRewrite: "",
         secure: false,
