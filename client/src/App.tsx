@@ -13,6 +13,7 @@ import EmailTemplateEditor from "./pages/EmailTemplateEditor";
 import EmailTemplates from "./pages/EmailTemplates";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
+import MerchantDetail from "./pages/MerchantDetail";
 import Merchants from "./pages/Merchants";
 import Orders from "./pages/Orders";
 import LandingPage from "./pages/LandingPage";
@@ -26,6 +27,7 @@ import PricingPlans from "./pages/PricingPlans";
 import MerchantHubNav from "./pages/MerchantHubNav";
 import Themes from "./pages/Themes";
 import MarketplaceReview from "./pages/MarketplaceReview";
+import WalletAdmin from "./pages/WalletAdmin";
 import WhatsappAccessRequests from "./pages/WhatsappAccessRequests";
 import ThemesPage from "./pages/marketplace/ThemesPage";
 import ThemeDetailPage from "./pages/marketplace/ThemeDetailPage";
@@ -85,6 +87,9 @@ function Router() {
       <Route path="/merchants">
         {() => <ProtectedRoute component={Merchants} />}
       </Route>
+      <Route path="/merchants/:merchantId">
+        {() => <ProtectedRoute component={MerchantDetail} />}
+      </Route>
       <Route path="/orders">
         {() => <ProtectedRoute component={Orders} />}
       </Route>
@@ -141,6 +146,9 @@ function Router() {
       </Route>
       <Route path="/whatsapp-access">
         {() => <ProtectedRoute component={WhatsappAccessRequests} />}
+      </Route>
+      <Route path="/wallets">
+        {() => <ProtectedRoute component={WalletAdmin} />}
       </Route>
       <Route path="/marketplace/themes">
         {() => <ProtectedRoute component={ThemesPage} />}

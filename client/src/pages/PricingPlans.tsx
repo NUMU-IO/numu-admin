@@ -33,10 +33,13 @@ import { getLoginUrl } from "@/const";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getPricingPlans,
+  getSignupSettings,
   updatePricingPlans,
+  updateSignupSettings,
   type PlanConfig,
   type PricingPlansConfig,
   type PromoConfig,
+  type SignupSettings,
 } from "@/services/pricingPlansService";
 import {
   CreditCard,
@@ -150,6 +153,9 @@ export default function PricingPlans() {
           </div>
         )}
 
+        {/* Signup & trial controls (separate config; saves independently) */}
+        <SignupTrialCard />
+
         {/* Plan cards */}
         {(plans ?? []).map((plan, idx) => (
           <Card key={plan.key}>
@@ -212,7 +218,8 @@ export default function PricingPlans() {
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="try_demo">Try Demo</SelectItem>
-                      <SelectItem value="subscribe">Subscribe</SelectItem>
+                      <SelectItem value="subscribe">Subscribe (signup)</SelectItem>
+                      <SelectItem value="signup_payg">Pay as you Grow signup</SelectItem>
                       <SelectItem value="contact">Contact Us</SelectItem>
                     </SelectContent>
                   </Select>
@@ -327,5 +334,115 @@ export default function PricingPlans() {
         </Card>
       </div>
     </DashboardLayout>
+  );
+}
+
+/**
+ * Signup & trial controls — separate platform_config from the plan cards
+ * (its own GET/PUT), so it saves independently of the pricing editor.
+ *
+ * - Free trial: on/off, length in days, and whether trial messaging shows
+ *   on the landing (the trial card is dropped from the public payload
+ *   when hidden). Registration reads the same config, so the length here
+ *   IS the length new merchants actually get.
+ * - Pay as you Grow: whether its card is injected into the landing
+ *   pricing. The commission % itself lives in Merchant Wallets → Settings
+ *   (rate-locked per merchant at activation).
+ */
+function SignupTrialCard() {
+  const queryClient = useQueryClient();
+  const signupQuery = useQuery({
+    queryKey: ["signupSettings"],
+    queryFn: getSignupSettings,
+  });
+  const [form, setForm] = useState<SignupSettings | null>(null);
+
+  useEffect(() => {
+    if (signupQuery.data && form === null) setForm(signupQuery.data);
+  }, [signupQuery.data, form]);
+
+  const saveMutation = useMutation({
+    mutationFn: updateSignupSettings,
+    onSuccess: (merged) => {
+      setForm(merged);
+      void queryClient.invalidateQueries({ queryKey: ["signupSettings"] });
+      toast.success("Signup & trial settings saved — live immediately.");
+    },
+    onError: () => toast.error("Failed to save signup settings."),
+  });
+
+  if (!form) {
+    return <Card className="h-40 animate-pulse bg-muted/30" />;
+  }
+
+  const set = <K extends keyof SignupSettings>(key: K, value: SignupSettings[K]) =>
+    setForm((f) => (f ? { ...f, [key]: value } : f));
+
+  return (
+    <Card className="border-primary/30">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Tag className="w-5 h-5" />
+          Signup &amp; Free Trial
+        </CardTitle>
+        <CardDescription>
+          Controls registration and what the landing page offers. The trial
+          length here is what new merchants actually receive.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+          <div className="flex items-center gap-3">
+            <Switch
+              checked={form.trial_enabled}
+              onCheckedChange={(v) => set("trial_enabled", v)}
+            />
+            <Label>Free trial enabled</Label>
+          </div>
+          <div>
+            <Label>Trial length (days)</Label>
+            <Input
+              type="number"
+              min={1}
+              max={365}
+              value={form.trial_days}
+              disabled={!form.trial_enabled}
+              onChange={(e) => set("trial_days", parseInt(e.target.value) || 1)}
+            />
+          </div>
+          <div className="flex items-center gap-3">
+            <Switch
+              checked={form.trial_visible_on_landing}
+              disabled={!form.trial_enabled}
+              onCheckedChange={(v) => set("trial_visible_on_landing", v)}
+            />
+            <Label>Show trial on landing</Label>
+          </div>
+        </div>
+        <Separator />
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <Switch
+              checked={form.payg_visible_on_landing}
+              onCheckedChange={(v) => set("payg_visible_on_landing", v)}
+            />
+            <Label>Show "Pay as you Grow" card on landing</Label>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Commission % comes live from Merchant Wallets → Settings
+          </p>
+        </div>
+        <div className="flex justify-end">
+          <Button
+            size="sm"
+            onClick={() => form && saveMutation.mutate(form)}
+            disabled={saveMutation.isPending}
+          >
+            <Save className="w-4 h-4 mr-2" />
+            {saveMutation.isPending ? "Saving..." : "Save signup settings"}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
