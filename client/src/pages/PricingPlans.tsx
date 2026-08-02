@@ -202,7 +202,16 @@ export default function PricingPlans() {
                     value={plan.price_monthly}
                     onChange={(e) => updatePlan(idx, { price_monthly: parseInt(e.target.value) || 0 })}
                   />
-                  <p className="text-xs text-muted-foreground mt-1">-1 = custom, 0 = free</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    -1 = custom, 0 = free.{" "}
+                    {["starter", "pro"].includes(plan.key) && (
+                      <span className="text-amber-600">
+                        Starter/Pro prices shown publicly are locked to the
+                        real plan catalog (Subscription Payments → Plans) —
+                        this field is display-config only and gets overridden.
+                      </span>
+                    )}
+                  </p>
                 </div>
                 <div>
                   <Label>Annual Price (EGP)</Label>
