@@ -30,11 +30,13 @@ import Themes from "./pages/Themes";
 import MarketplaceReviews from "./pages/MarketplaceReviews";
 import MarketplaceReview from "./pages/MarketplaceReview";
 import WalletAdmin from "./pages/WalletAdmin";
+import SubscriptionPayments from "./pages/SubscriptionPayments";
 import WhatsappAccessRequests from "./pages/WhatsappAccessRequests";
 import ThemesPage from "./pages/marketplace/ThemesPage";
 import ThemeDetailPage from "./pages/marketplace/ThemeDetailPage";
 import StoreSnapshotsPage from "./pages/marketplace/StoreSnapshotsPage";
 import PlatformSettingsPage from "./pages/platform/SettingsPage";
+import CapabilitiesPage from "./pages/platform/CapabilitiesPage";
 
 // Placeholder page for features not yet implemented
 function ComingSoon({ title }: { title: string }) {
@@ -157,6 +159,9 @@ function Router() {
       <Route path="/wallets">
         {() => <ProtectedRoute component={WalletAdmin} />}
       </Route>
+      <Route path="/subscription-payments">
+        {() => <ProtectedRoute component={SubscriptionPayments} />}
+      </Route>
       <Route path="/marketplace/themes">
         {() => <ProtectedRoute component={ThemesPage} />}
       </Route>
@@ -179,6 +184,11 @@ function Router() {
       </Route>
       <Route path="/platform/settings">
         {() => <ProtectedRoute component={PlatformSettingsPage} />}
+      </Route>
+      {/* Capability registry — the control plane for what may extend NUMU
+          (ADR-0 / ADR-6). Sits next to /platform/settings under Platform. */}
+      <Route path="/platform/capabilities">
+        {() => <ProtectedRoute component={CapabilitiesPage} />}
       </Route>
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
