@@ -8,6 +8,7 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { cn } from "@/lib/utils";
 import {
+  BadgeCheck,
   BarChart3,
   Building2,
   CreditCard,
@@ -89,6 +90,7 @@ const platformNavItems: NavItem[] = [
 
 const secondaryNavItems: NavItem[] = [
   { icon: Wallet, label: "Merchant Wallets", href: "/wallets" },
+  { icon: BadgeCheck, label: "Subscription Payments", href: "/subscription-payments" },
   { icon: Scale, label: "Reconciliation", href: "/reconciliation" },
   { icon: FileText, label: "Reports", href: "/reports" },
   { icon: Menu, label: "Merchant Hub Nav", href: "/merchant-hub-nav" },
