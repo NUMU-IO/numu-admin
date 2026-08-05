@@ -49,10 +49,11 @@ import { Switch } from "@/components/ui/switch";
 import {
   getPlatformConfig,
   setAppEmbedsTabEnabled,
+  setApplePayEnabled,
   setDefaultTheme,
 } from "@/services/platformConfigApi";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Loader2, Puzzle, Save } from "lucide-react";
+import { AlertTriangle, CreditCard, Loader2, Puzzle, Save } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -112,6 +113,22 @@ export default function PlatformSettingsPage() {
         snap.app_embeds_tab_enabled
           ? "App embeds tab enabled for merchants"
           : "App embeds tab hidden from merchants",
+      );
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : "Couldn't save");
+    },
+  });
+
+  // Apple Pay master switch (platform-wide kill switch).
+  const applePayMutation = useMutation({
+    mutationFn: (enabled: boolean) => setApplePayEnabled(enabled),
+    onSuccess: (snap) => {
+      queryClient.invalidateQueries({ queryKey: PLATFORM_CONFIG_QUERY_KEY });
+      toast.success(
+        snap.apple_pay_enabled
+          ? "Apple Pay enabled platform-wide"
+          : "Apple Pay disabled platform-wide",
       );
     },
     onError: (err) => {
@@ -279,6 +296,41 @@ export default function PlatformSettingsPage() {
                 )}
                 disabled={appEmbedsMutation.isPending}
                 onCheckedChange={(v) => appEmbedsMutation.mutate(v)}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Apple Pay master switch — kill switch across all storefronts.
+            Default ON; per-store Paymob/Kashier toggles are honoured unless
+            this is turned off. Affects storefront checkout surfacing only. */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CreditCard className="h-4 w-4" />
+              Payments — Apple Pay
+            </CardTitle>
+            <CardDescription>
+              Master switch for Apple Pay across every storefront. When{" "}
+              <strong>off</strong>, Apple Pay is hidden everywhere regardless of
+              each merchant's Paymob / Kashier settings. Leave{" "}
+              <strong>on</strong> for normal operation; use off as a kill switch.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between rounded-md border p-3">
+              <div className="text-sm">
+                <p className="font-medium">Apple Pay</p>
+                <p className="text-xs text-muted-foreground">
+                  {(platformConfigQuery.data?.apple_pay_enabled ?? true)
+                    ? "Available platform-wide"
+                    : "Disabled platform-wide"}
+                </p>
+              </div>
+              <Switch
+                checked={platformConfigQuery.data?.apple_pay_enabled ?? true}
+                disabled={applePayMutation.isPending}
+                onCheckedChange={(v) => applePayMutation.mutate(v)}
               />
             </div>
           </CardContent>
