@@ -44,3 +44,29 @@ export async function updatePricingPlans(
     body: JSON.stringify(data),
   });
 }
+
+// ─── Signup & trial settings ────────────────────────────────────────────────
+// Controls registration behaviour + landing visibility: the free-trial
+// switch/length and whether the Pay-as-you-Grow card is injected into
+// the public pricing payload (its commission % comes from Merchant
+// Wallets → Settings, not from here).
+
+export interface SignupSettings {
+  trial_enabled: boolean;
+  trial_days: number;
+  trial_visible_on_landing: boolean;
+  payg_visible_on_landing: boolean;
+}
+
+export async function getSignupSettings(): Promise<SignupSettings> {
+  return apiClient<SignupSettings>("/admin/landing-config/signup");
+}
+
+export async function updateSignupSettings(
+  patch: Partial<SignupSettings>,
+): Promise<SignupSettings> {
+  return apiClient<SignupSettings>("/admin/landing-config/signup", {
+    method: "PUT",
+    body: JSON.stringify(patch),
+  });
+}

@@ -9,6 +9,7 @@
  */
 
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useLocation } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
 import { DashboardLayoutSkeleton } from "@/components/DashboardLayoutSkeleton";
 import { Badge } from "@/components/ui/badge";
@@ -91,6 +92,7 @@ const planColors: Record<string, string> = {
 
 export default function Merchants() {
   const { user, loading, isAuthenticated } = useAuth();
+  const [, navigate] = useLocation();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [page, setPage] = useState(0);
@@ -360,7 +362,11 @@ export default function Merchants() {
               </TableRow>
             ) : (
               merchants.map((merchant) => (
-                <TableRow key={merchant.id}>
+                <TableRow
+                  key={merchant.id}
+                  className="cursor-pointer"
+                  onClick={() => navigate(`/merchants/${merchant.merchantId}`)}
+                >
                   <TableCell>
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary/20 to-primary/40 flex items-center justify-center">
@@ -388,6 +394,7 @@ export default function Merchants() {
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex items-center gap-1 text-primary hover:underline"
+                        onClick={(e) => e.stopPropagation()}
                       >
                         {merchant.domain}
                         <ExternalLink className="w-3 h-3" />
@@ -413,7 +420,9 @@ export default function Merchants() {
                   <TableCell className="text-muted-foreground">
                     {new Date(merchant.createdAt).toLocaleDateString()}
                   </TableCell>
-                  <TableCell>
+                  {/* Action cell swallows clicks so row-click → detail page
+                      never fires from the buttons. */}
+                  <TableCell onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-end gap-1">
                       <Button
                         variant="ghost"

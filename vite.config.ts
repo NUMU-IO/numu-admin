@@ -1,7 +1,7 @@
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import path from "node:path";
-import { defineConfig, loadEnv, type Plugin } from "vite";
+import { defineConfig, type Plugin } from "vite";
 
 /**
  * Injects Content-Security-Policy meta tag only in production builds.
@@ -37,17 +37,24 @@ function vitePluginCSP(): Plugin {
   };
 }
 
-export default defineConfig(({ mode }) => {
-  // Load env from .env / .env.local / .env.<mode> with no prefix filter
-  // so non-`VITE_` vars (like NUMU_API_PROXY_TARGET, used by the dev
-  // server's proxy below) are available in the config. Without this,
-  // `process.env.X` only sees vars set in the shell at Vite start
-  // time — `.env.local` is silently ignored, leaving the proxy stuck
-  // on its production default.
-  const env = loadEnv(mode, path.resolve(import.meta.dirname), "");
-  const apiProxyTarget = env.NUMU_API_PROXY_TARGET || "https://numueg.app";
+/**
+ * Where the dev server proxies `/api` to.
+ *
+ * This used to be hardcoded to `https://numueg.app` — i.e. **production**.
+ * Running `npm run dev` on this repo therefore pointed the whole admin
+ * backoffice at the live platform: every list, every edit, and every
+ * destructive action (suspend a capability platform-wide, approve a theme,
+ * refund a purchase) executed against production data from `localhost:5000`,
+ * with nothing in the UI saying so. There is no test/staging stack any more,
+ * so an accidental prod write has no safety net.
+ *
+ * Default is now the LOCAL API. Pointing at a remote host has to be a
+ * deliberate, visible act: `ADMIN_API_PROXY_TARGET=https://numueg.app npm run dev`.
+ */
+const API_PROXY_TARGET =
+  process.env.ADMIN_API_PROXY_TARGET ?? "http://127.0.0.1:8001";
 
-  return ({
+export default defineConfig(({ mode }) => ({
   plugins: [react(), tailwindcss(), vitePluginCSP()],
   resolve: {
     alias: {
@@ -72,12 +79,7 @@ export default defineConfig(({ mode }) => {
     ],
     proxy: {
       "/api": {
-        // Override with NUMU_API_PROXY_TARGET in .env.local for local dev
-        // (e.g. NUMU_API_PROXY_TARGET=http://localhost:8021). Defaults to
-        // production so a fresh checkout works against staging without
-        // any local API running. Read via loadEnv() above (Vite doesn't
-        // auto-populate non-`VITE_` vars into process.env).
-        target: apiProxyTarget,
+        target: API_PROXY_TARGET,
         changeOrigin: true,
         cookieDomainRewrite: "",
         secure: false,
@@ -142,5 +144,4 @@ export default defineConfig(({ mode }) => {
     drop: mode === "production" ? ["debugger"] : [],
     pure: mode === "production" ? ["console.log", "console.debug", "console.info"] : [],
   },
-  });
-});
+}));

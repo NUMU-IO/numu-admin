@@ -8,18 +8,22 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { cn } from "@/lib/utils";
 import {
+  BadgeCheck,
   BarChart3,
   Building2,
   CreditCard,
   FileText,
   Globe,
   Home,
+  KeyRound,
   LogOut,
   Mail,
   Menu,
+  MessageCircle,
   Package,
   Palette,
   Scale,
+  Wallet,
   ServerCog,
   Settings,
   ShieldCheck,
@@ -69,6 +73,7 @@ interface MarketplaceNavItem extends NavItem {
 const marketplaceNavItems: MarketplaceNavItem[] = [
   { icon: Palette, label: "Themes", href: "/marketplace/themes" },
   { icon: ShieldCheck, label: "Review queue", href: "/marketplace/review" },
+  { icon: MessageCircle, label: "WhatsApp Access", href: "/whatsapp-access" },
   { icon: Star, label: "Reviews", href: "/marketplace/reviews", comingSoon: true },
   // Session C — snapshots browser landed; un-grey. Defaults to the
   // bare /marketplace/snapshots route which prompts the admin to pick
@@ -81,9 +86,14 @@ const marketplaceNavItems: MarketplaceNavItem[] = [
 // `platform_settings` JSONB bag — branding, signups, auth policy).
 const platformNavItems: NavItem[] = [
   { icon: ServerCog, label: "Settings", href: "/platform/settings" },
+  // Capability registry (ADR-0 / ADR-6) — the control plane for what may
+  // extend NUMU, including the platform-wide kill switch.
+  { icon: KeyRound, label: "Capabilities", href: "/platform/capabilities" },
 ];
 
 const secondaryNavItems: NavItem[] = [
+  { icon: Wallet, label: "Merchant Wallets", href: "/wallets" },
+  { icon: BadgeCheck, label: "Subscription Payments", href: "/subscription-payments" },
   { icon: Scale, label: "Reconciliation", href: "/reconciliation" },
   { icon: FileText, label: "Reports", href: "/reports" },
   { icon: Menu, label: "Merchant Hub Nav", href: "/merchant-hub-nav" },

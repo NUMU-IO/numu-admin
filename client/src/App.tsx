@@ -13,6 +13,7 @@ import EmailTemplateEditor from "./pages/EmailTemplateEditor";
 import EmailTemplates from "./pages/EmailTemplates";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
+import MerchantDetail from "./pages/MerchantDetail";
 import Merchants from "./pages/Merchants";
 import Orders from "./pages/Orders";
 import LandingPage from "./pages/LandingPage";
@@ -28,10 +29,14 @@ import MerchantHubNav from "./pages/MerchantHubNav";
 import Themes from "./pages/Themes";
 import MarketplaceReviews from "./pages/MarketplaceReviews";
 import MarketplaceReview from "./pages/MarketplaceReview";
+import WalletAdmin from "./pages/WalletAdmin";
+import SubscriptionPayments from "./pages/SubscriptionPayments";
+import WhatsappAccessRequests from "./pages/WhatsappAccessRequests";
 import ThemesPage from "./pages/marketplace/ThemesPage";
 import ThemeDetailPage from "./pages/marketplace/ThemeDetailPage";
 import StoreSnapshotsPage from "./pages/marketplace/StoreSnapshotsPage";
 import PlatformSettingsPage from "./pages/platform/SettingsPage";
+import CapabilitiesPage from "./pages/platform/CapabilitiesPage";
 
 // Placeholder page for features not yet implemented
 function ComingSoon({ title }: { title: string }) {
@@ -84,6 +89,9 @@ function Router() {
       <Route path="/">{() => <ProtectedRoute component={Home} />}</Route>
       <Route path="/merchants">
         {() => <ProtectedRoute component={Merchants} />}
+      </Route>
+      <Route path="/merchants/:merchantId">
+        {() => <ProtectedRoute component={MerchantDetail} />}
       </Route>
       <Route path="/orders">
         {() => <ProtectedRoute component={Orders} />}
@@ -145,6 +153,15 @@ function Router() {
       <Route path="/marketplace/review">
         {() => <ProtectedRoute component={MarketplaceReview} />}
       </Route>
+      <Route path="/whatsapp-access">
+        {() => <ProtectedRoute component={WhatsappAccessRequests} />}
+      </Route>
+      <Route path="/wallets">
+        {() => <ProtectedRoute component={WalletAdmin} />}
+      </Route>
+      <Route path="/subscription-payments">
+        {() => <ProtectedRoute component={SubscriptionPayments} />}
+      </Route>
       <Route path="/marketplace/themes">
         {() => <ProtectedRoute component={ThemesPage} />}
       </Route>
@@ -167,6 +184,11 @@ function Router() {
       </Route>
       <Route path="/platform/settings">
         {() => <ProtectedRoute component={PlatformSettingsPage} />}
+      </Route>
+      {/* Capability registry — the control plane for what may extend NUMU
+          (ADR-0 / ADR-6). Sits next to /platform/settings under Platform. */}
+      <Route path="/platform/capabilities">
+        {() => <ProtectedRoute component={CapabilitiesPage} />}
       </Route>
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />

@@ -174,3 +174,80 @@ export async function setInstapayOcrProvider(
     },
   );
 }
+
+// ─── Merchant detail (GET /admin/stores/{id}/detail) ────────────────────────
+
+export interface MerchantDetail {
+  store: {
+    id: string;
+    name: string;
+    slug: string;
+    subdomain: string | null;
+    custom_domain: string | null;
+    status: string;
+    logo_url: string | null;
+    country: string | null;
+    default_currency: string | null;
+    default_language: string | null;
+    storefront_url: string | null;
+    created_at: string | null;
+  };
+  tenant: {
+    id: string;
+    name: string;
+    plan: string;
+    lifecycle_state: string | null;
+    expires_at: string | null;
+    trial_started_at: string | null;
+    trial_converted_at: string | null;
+    billing_cycle: string | null;
+    next_renewal_at: string | null;
+    payment_method_last4: string | null;
+    feature_flags: Record<string, boolean>;
+    is_demo: boolean;
+    demo_name: string | null;
+    demo_email: string | null;
+    demo_whatsapp: string | null;
+    demo_started_at: string | null;
+  } | null;
+  owner: {
+    id: string;
+    name: string;
+    email: string;
+    phone: string | null;
+    status: string | null;
+    plan_intent: string | null;
+    trial_ends_at: string | null;
+    last_login_at: string | null;
+    created_at: string | null;
+  } | null;
+  wallet: {
+    balance_cents: number;
+    pending_balance_cents: number;
+    currency: string;
+    status: string;
+    commission_bps_override: number | null;
+  } | null;
+  metrics: {
+    orders_count: number;
+    paid_revenue_cents: number;
+    last_order_at: string | null;
+    products_count: number;
+    customers_count: number;
+  };
+  recent_orders: {
+    id: string;
+    order_number: string;
+    total_cents: number;
+    currency: string;
+    status: string | null;
+    payment_status: string | null;
+    created_at: string | null;
+  }[];
+}
+
+export async function getMerchantDetail(
+  storeId: string,
+): Promise<MerchantDetail> {
+  return apiClient<MerchantDetail>(`/admin/stores/${storeId}/detail`);
+}
