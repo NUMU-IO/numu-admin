@@ -1,0 +1,11 @@
+# Internal admin backoffice. Nothing here belongs in a search index.
+#
+# Vercel checks the filesystem before applying rewrites, so this file is served
+# rather than being swallowed by the catch-all `/(.*) -> /index.html` rule —
+# which is why /robots.txt previously returned the SPA shell and crawlers saw
+# HTML instead of directives.
+#
+# Disallow alone only stops crawling, not indexing of a URL discovered
+# elsewhere; the X-Robots-Tag header in vercel.json is what guarantees removal.
+User-agent: *
+Disallow: /
