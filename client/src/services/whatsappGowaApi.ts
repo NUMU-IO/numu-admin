@@ -119,3 +119,39 @@ export async function unpairPlatformDevice(): Promise<void> {
     method: "POST",
   });
 }
+
+export interface WhatsAppMessageLogItem {
+  created_at: string;
+  store_id?: string | null;
+  store_name?: string | null;
+  phone: string;
+  /** inbound | outbound */
+  direction: string;
+  template_name?: string | null;
+  content?: string | null;
+  /** queued | sent | delivered | read | failed */
+  status: string;
+  error_code?: string | null;
+  message_id?: string | null;
+}
+
+/**
+ * Recent WhatsApp traffic across stores.
+ *
+ * Transport-agnostic on purpose: it reads the message log, which both the Meta
+ * and GOWA paths write to, so debugging "did this go out" never starts with
+ * "which transport was that store on".
+ */
+export async function listWhatsAppMessages(params?: {
+  storeId?: string;
+  direction?: "inbound" | "outbound";
+  limit?: number;
+}): Promise<WhatsAppMessageLogItem[]> {
+  const q = new URLSearchParams();
+  if (params?.storeId) q.set("store_id", params.storeId);
+  if (params?.direction) q.set("direction", params.direction);
+  q.set("limit", String(params?.limit ?? 50));
+  return apiClient<WhatsAppMessageLogItem[]>(
+    `/admin/whatsapp/gowa/messages?${q.toString()}`,
+  );
+}
