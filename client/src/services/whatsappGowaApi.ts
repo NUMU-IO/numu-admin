@@ -84,3 +84,55 @@ export async function unpairGowaDevice(storeId: string): Promise<void> {
     method: "POST",
   });
 }
+
+export interface GowaDeviceListItem {
+  device_id: string;
+  state?: string | null;
+  jid?: string | null;
+  phone?: string | null;
+  is_platform: boolean;
+  claimed_by_store_id?: string | null;
+}
+
+/** Every session GOWA is holding, so the platform number can be adopted by clicking. */
+export async function listGowaDevices(): Promise<GowaDeviceListItem[]> {
+  const res = await apiClient<Envelope<GowaDeviceListItem[]>>(
+    "/admin/whatsapp/gowa/devices",
+  );
+  return res.data;
+}
+
+export async function getPlatformStatus(): Promise<GowaDeviceStatus> {
+  const res = await apiClient<Envelope<GowaDeviceStatus>>(
+    "/admin/whatsapp/gowa/platform/status",
+  );
+  return res.data;
+}
+
+export async function pairPlatformDevice(
+  phone: string,
+  acknowledgeRisk: boolean,
+): Promise<PairResult> {
+  const res = await apiClient<Envelope<PairResult>>(
+    "/admin/whatsapp/gowa/platform/pair",
+    {
+      method: "POST",
+      body: JSON.stringify({ phone, method: "code", acknowledge_risk: acknowledgeRisk }),
+    },
+  );
+  return res.data;
+}
+
+/** Claim an ALREADY-LINKED session as the platform device, without re-pairing. */
+export async function adoptPlatformDevice(deviceId: string): Promise<void> {
+  await apiClient<Envelope<unknown>>(
+    `/admin/whatsapp/gowa/platform/adopt?device_id=${encodeURIComponent(deviceId)}`,
+    { method: "POST" },
+  );
+}
+
+export async function unpairPlatformDevice(): Promise<void> {
+  await apiClient<Envelope<unknown>>("/admin/whatsapp/gowa/platform/unpair", {
+    method: "POST",
+  });
+}
