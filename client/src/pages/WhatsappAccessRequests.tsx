@@ -19,6 +19,8 @@
  */
 
 import { useState } from "react";
+import { PlatformDeviceCard } from "@/components/whatsapp/PlatformDeviceCard";
+import { TransportAssignment } from "@/components/whatsapp/TransportAssignment";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -306,6 +308,16 @@ function AccessRequestCard({ item, onAct, pending }: AccessRequestCardProps) {
             </Button>
           )}
         </div>
+
+        {/* Transport assignment. Only meaningful once access is granted —
+            choosing Meta vs GOWA, and for GOWA whether the store rides the
+            shared platform number or pairs its own. */}
+        {item.status === "approved" && (
+          <TransportAssignment
+            storeId={item.store_id}
+            storeName={item.store_name}
+          />
+        )}
       </CardContent>
 
       <Dialog open={dialog !== null} onOpenChange={(o) => !o && setDialog(null)}>
@@ -428,18 +440,18 @@ export default function WhatsappAccessRequests() {
   };
 
   return (
-    <DashboardLayout title="WhatsApp access">
+    <DashboardLayout title="WhatsApp">
       <div className="space-y-6">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
               <MessageCircle className="h-6 w-6 text-primary" />
-              WhatsApp access requests
+              WhatsApp
             </h1>
             <p className="text-sm text-muted-foreground mt-1 max-w-xl">
               Approve or reject merchant requests to switch on WhatsApp
-              notifications. Approved stores can be disabled later; disabled or
-              rejected stores can be re-approved from here.
+              notifications, and choose how each approved store sends — Meta
+              Cloud, the shared NUMU number, or their own number over GOWA.
             </p>
           </div>
           <Button
@@ -456,6 +468,10 @@ export default function WhatsappAccessRequests() {
             Refresh
           </Button>
         </div>
+
+        {/* Sending identity for every merchant on the shared number. Above the
+            queue because if this session dies, they all stop sending. */}
+        <PlatformDeviceCard />
 
         <Tabs
           value={statusFilter}
