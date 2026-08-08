@@ -1,0 +1,86 @@
+/**
+ * Admin API for the GOWA WhatsApp transport.
+ *
+ * GOWA sends from a real WhatsApp account linked as a companion device, rather
+ * than through Meta's Business API. That means no template approval and no
+ * marketing frequency cap — and a genuine risk that WhatsApp bans the number,
+ * which for a BYO merchant is the number their customers already know.
+ *
+ * Both the provider switch and pairing therefore REQUIRE `acknowledge_risk`;
+ * the backend refuses without it and records which admin accepted.
+ */
+
+import { apiClient } from "./api";
+
+export type WhatsAppProvider = "meta_cloud" | "gowa";
+
+export interface GowaDeviceStatus {
+  provider: WhatsAppProvider;
+  paired: boolean;
+  device_id?: string | null;
+  phone?: string | null;
+  /** pending | connected | disconnected | logged_out */
+  status?: string | null;
+  /** Live probe of the GOWA session; null when GOWA is unreachable. */
+  is_connected?: boolean | null;
+  is_logged_in?: boolean | null;
+  last_seen_at?: string | null;
+  /** GOWA's own wording — the only thing distinguishing a ban from a drop. */
+  last_error?: string | null;
+}
+
+export interface PairResult {
+  device_id: string;
+  method: "code" | "qr";
+  /** Read this to the merchant. Short-lived. */
+  pair_code?: string | null;
+  /** data: URI — GOWA's own QR link is loopback-only, so the API inlines it. */
+  qr_data_uri?: string | null;
+  expires_in_seconds?: number | null;
+}
+
+interface Envelope<T> {
+  success: boolean;
+  data: T;
+  message?: string | null;
+}
+
+export async function getGowaStatus(storeId: string): Promise<GowaDeviceStatus> {
+  const res = await apiClient<Envelope<GowaDeviceStatus>>(
+    `/admin/whatsapp/gowa/${storeId}/status`,
+  );
+  return res.data;
+}
+
+export async function setWhatsAppProvider(
+  storeId: string,
+  provider: WhatsAppProvider,
+  acknowledgeRisk: boolean,
+): Promise<void> {
+  await apiClient<Envelope<unknown>>(`/admin/whatsapp/gowa/${storeId}/provider`, {
+    method: "PUT",
+    body: JSON.stringify({ provider, acknowledge_risk: acknowledgeRisk }),
+  });
+}
+
+export async function pairGowaDevice(
+  storeId: string,
+  phone: string,
+  method: "code" | "qr",
+  acknowledgeRisk: boolean,
+): Promise<PairResult> {
+  const res = await apiClient<Envelope<PairResult>>(
+    `/admin/whatsapp/gowa/${storeId}/pair`,
+    {
+      method: "POST",
+      body: JSON.stringify({ phone, method, acknowledge_risk: acknowledgeRisk }),
+    },
+  );
+  return res.data;
+}
+
+export async function unpairGowaDevice(storeId: string): Promise<void> {
+  await apiClient<Envelope<unknown>>(`/admin/whatsapp/gowa/${storeId}/unpair`, {
+    method: "POST",
+  });
+}

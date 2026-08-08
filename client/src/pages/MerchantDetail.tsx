@@ -13,6 +13,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useLocation, useRoute } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
+import { WhatsAppTransportPanel } from "@/components/merchants/WhatsAppTransportPanel";
 import { DashboardLayoutSkeleton } from "@/components/DashboardLayoutSkeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -472,6 +473,11 @@ export default function MerchantDetail() {
                 )}
               </CardContent>
             </Card>
+
+            {/* Which WhatsApp transport this merchant sends through, and the
+                device pairing when it is GOWA. Lives here because this is the
+                page staff already have open when a merchant calls about it. */}
+            <WhatsAppTransportPanel storeId={storeId} storeName={d.store.name} />
           </>
         )}
       </div>
