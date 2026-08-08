@@ -39,17 +39,14 @@ export interface PairResult {
   expires_in_seconds?: number | null;
 }
 
-interface Envelope<T> {
-  success: boolean;
-  data: T;
-  message?: string | null;
-}
+// NOTE: `apiClient` already returns `json.data` from the {success,data,message}
+// envelope. Wrapping the generic in an Envelope and reading `.data` again
+// yielded undefined on every call — which rendered as "Meta Cloud" / "Not set"
+// everywhere, i.e. silently wrong rather than an error. Call it with the
+// payload type directly, as the other services do.
 
 export async function getGowaStatus(storeId: string): Promise<GowaDeviceStatus> {
-  const res = await apiClient<Envelope<GowaDeviceStatus>>(
-    `/admin/whatsapp/gowa/${storeId}/status`,
-  );
-  return res.data;
+  return apiClient<GowaDeviceStatus>(`/admin/whatsapp/gowa/${storeId}/status`);
 }
 
 export async function setWhatsAppProvider(
@@ -57,7 +54,7 @@ export async function setWhatsAppProvider(
   provider: WhatsAppProvider,
   acknowledgeRisk: boolean,
 ): Promise<void> {
-  await apiClient<Envelope<unknown>>(`/admin/whatsapp/gowa/${storeId}/provider`, {
+  await apiClient<void>(`/admin/whatsapp/gowa/${storeId}/provider`, {
     method: "PUT",
     body: JSON.stringify({ provider, acknowledge_risk: acknowledgeRisk }),
   });
@@ -69,18 +66,14 @@ export async function pairGowaDevice(
   method: "code" | "qr",
   acknowledgeRisk: boolean,
 ): Promise<PairResult> {
-  const res = await apiClient<Envelope<PairResult>>(
-    `/admin/whatsapp/gowa/${storeId}/pair`,
-    {
-      method: "POST",
-      body: JSON.stringify({ phone, method, acknowledge_risk: acknowledgeRisk }),
-    },
-  );
-  return res.data;
+  return apiClient<PairResult>(`/admin/whatsapp/gowa/${storeId}/pair`, {
+    method: "POST",
+    body: JSON.stringify({ phone, method, acknowledge_risk: acknowledgeRisk }),
+  });
 }
 
 export async function unpairGowaDevice(storeId: string): Promise<void> {
-  await apiClient<Envelope<unknown>>(`/admin/whatsapp/gowa/${storeId}/unpair`, {
+  await apiClient<void>(`/admin/whatsapp/gowa/${storeId}/unpair`, {
     method: "POST",
   });
 }
@@ -96,43 +89,33 @@ export interface GowaDeviceListItem {
 
 /** Every session GOWA is holding, so the platform number can be adopted by clicking. */
 export async function listGowaDevices(): Promise<GowaDeviceListItem[]> {
-  const res = await apiClient<Envelope<GowaDeviceListItem[]>>(
-    "/admin/whatsapp/gowa/devices",
-  );
-  return res.data;
+  return apiClient<GowaDeviceListItem[]>("/admin/whatsapp/gowa/devices");
 }
 
 export async function getPlatformStatus(): Promise<GowaDeviceStatus> {
-  const res = await apiClient<Envelope<GowaDeviceStatus>>(
-    "/admin/whatsapp/gowa/platform/status",
-  );
-  return res.data;
+  return apiClient<GowaDeviceStatus>("/admin/whatsapp/gowa/platform/status");
 }
 
 export async function pairPlatformDevice(
   phone: string,
   acknowledgeRisk: boolean,
 ): Promise<PairResult> {
-  const res = await apiClient<Envelope<PairResult>>(
-    "/admin/whatsapp/gowa/platform/pair",
-    {
-      method: "POST",
-      body: JSON.stringify({ phone, method: "code", acknowledge_risk: acknowledgeRisk }),
-    },
-  );
-  return res.data;
+  return apiClient<PairResult>("/admin/whatsapp/gowa/platform/pair", {
+    method: "POST",
+    body: JSON.stringify({ phone, method: "code", acknowledge_risk: acknowledgeRisk }),
+  });
 }
 
 /** Claim an ALREADY-LINKED session as the platform device, without re-pairing. */
 export async function adoptPlatformDevice(deviceId: string): Promise<void> {
-  await apiClient<Envelope<unknown>>(
+  await apiClient<void>(
     `/admin/whatsapp/gowa/platform/adopt?device_id=${encodeURIComponent(deviceId)}`,
     { method: "POST" },
   );
 }
 
 export async function unpairPlatformDevice(): Promise<void> {
-  await apiClient<Envelope<unknown>>("/admin/whatsapp/gowa/platform/unpair", {
+  await apiClient<void>("/admin/whatsapp/gowa/platform/unpair", {
     method: "POST",
   });
 }

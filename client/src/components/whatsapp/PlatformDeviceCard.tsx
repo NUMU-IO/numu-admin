@@ -101,10 +101,27 @@ export function PlatformDeviceCard() {
               </p>
             )}
           </>
+        ) : statusQuery.isError ? (
+          /* A failed lookup used to render exactly like "no device set", so a
+             broken request was indistinguishable from a genuine empty state —
+             which is precisely the case where the operator needs to know. */
+          <p className="rounded bg-destructive/10 p-2 text-destructive">
+            Could not load the platform device:{" "}
+            {(statusQuery.error as Error)?.message ?? "request failed"}
+          </p>
+        ) : statusQuery.isLoading ? (
+          <p className="text-muted-foreground">Loading…</p>
         ) : (
           <p className="text-muted-foreground">
             No platform device set — merchants assigned to the platform number
             cannot send.
+          </p>
+        )}
+
+        {devicesQuery.isError && (
+          <p className="rounded bg-destructive/10 p-2 text-xs text-destructive">
+            Could not list GOWA sessions:{" "}
+            {(devicesQuery.error as Error)?.message ?? "request failed"}
           </p>
         )}
 
