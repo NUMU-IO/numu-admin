@@ -58,7 +58,16 @@ export function TransportAssignment({
   const statusQuery = useQuery({
     queryKey: ["gowa-status", storeId],
     queryFn: () => getGowaStatus(storeId),
-    refetchInterval: pairing ? 3000 : false,
+    // Poll fast while a code is outstanding, slowly otherwise — never `false`.
+    // With no polling the card rendered once on mount and then only moved if an
+    // invalidation landed, so a successful switch could sit there still showing
+    // the old transport. Self-correcting beats relying on one cache event.
+    refetchInterval: pairing ? 3000 : 15000,
+    refetchOnWindowFocus: true,
+    // Treat cached status as immediately stale: this drives a decision about
+    // which number a merchant sends from, so showing a stale value is worse
+    // than a refetch.
+    staleTime: 0,
   });
   const status = statusQuery.data;
 
@@ -89,8 +98,11 @@ export function TransportAssignment({
         await unpairGowaDevice(storeId);
       }
     },
-    onSuccess: (_d, mode) => {
+    onSuccess: async (_d, mode) => {
       setPairing(null);
+      // Await the refetch: the toast should not claim success while the card is
+      // still displaying the previous transport.
+      await statusQuery.refetch();
       invalidate();
       toast.success(`${storeName ?? "Store"} → ${MODE_LABEL[mode]}`);
     },
