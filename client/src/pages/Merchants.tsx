@@ -48,7 +48,9 @@ import {
   impersonateMerchant,
   setInstapayOcrProvider,
   toggleMerchantInternal,
+  setFounderCohort,
   type InstapayOcrProvider,
+  type Merchant,
 } from "@/services/merchantService";
 import {
   Building2,
@@ -58,6 +60,7 @@ import {
   ExternalLink,
   FlaskConical,
   LogIn,
+  Star,
   MoreHorizontal,
   ScanText,
   Search,
@@ -179,6 +182,38 @@ export default function Merchants() {
       toast.error((err as Error).message || "Failed to update OCR provider");
     },
   });
+
+  // Founder-merchant badge. Not a plain toggle: granting it needs a COHORT
+  // YEAR, and the year has to be the merchant's real join year or the badge
+  // on their storefront becomes a false claim. So the dialog below opens
+  // pre-filled from their signup date — the honest value is the default one.
+  const [founderTarget, setFounderTarget] = useState<Merchant | null>(null);
+  const [founderYear, setFounderYear] = useState("");
+
+  const founderMutation = useMutation({
+    mutationFn: ({ merchantId, cohort }: { merchantId: string; cohort: string | null }) =>
+      setFounderCohort(merchantId, cohort),
+    onSuccess: (_data, variables) => {
+      toast.success(
+        variables.cohort
+          ? `Founder badge granted — class of ${variables.cohort}`
+          : "Founder badge removed",
+      );
+      setFounderTarget(null);
+      queryClient.invalidateQueries({ queryKey: ["merchants"] });
+    },
+    onError: () => {
+      toast.error("Couldn't update founder status");
+    },
+  });
+
+  const openFounderDialog = (merchant: Merchant) => {
+    setFounderTarget(merchant);
+    // Their actual signup year, so the default is the true one.
+    setFounderYear(
+      merchant.founderCohort ?? String(merchant.createdAt.getFullYear()),
+    );
+  };
 
   // Toggle internal (test/sandbox) flag on the merchant's tenant
   const toggleInternalMutation = useMutation({
@@ -382,6 +417,14 @@ export default function Merchants() {
                               Internal
                             </Badge>
                           )}
+                          {merchant.founderCohort && (
+                            <Badge
+                              className="bg-amber-100 text-amber-700 text-[10px] px-1.5 py-0"
+                              title={`Founder merchant — class of ${merchant.founderCohort}`}
+                            >
+                              Founder {merchant.founderCohort}
+                            </Badge>
+                          )}
                         </div>
                         <p className="text-sm text-muted-foreground">{merchant.email}</p>
                       </div>
@@ -438,6 +481,22 @@ export default function Merchants() {
                         className={merchant.isInternal ? "text-orange-600" : ""}
                       >
                         <FlaskConical className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title={
+                          merchant.founderCohort
+                            ? `Founder merchant (${merchant.founderCohort}) — click to change`
+                            : "Mark as founder merchant"
+                        }
+                        onClick={() => openFounderDialog(merchant)}
+                        className={merchant.founderCohort ? "text-amber-600" : ""}
+                      >
+                        <Star
+                          className="w-4 h-4"
+                          fill={merchant.founderCohort ? "currentColor" : "none"}
+                        />
                       </Button>
                       <Button
                         variant="ghost"
@@ -557,6 +616,76 @@ export default function Merchants() {
           + privacy (HF Spaces) implications, so it lives behind a
           dedicated dialog with its own confirmation flow rather than
           hidden inside the status dialog. */}
+      {/* Founder-merchant badge. A cohort YEAR, never a rank: a rank would
+          tell merchant #42 that 41 came before them, publishing how many
+          merchants are on the platform to every merchant — and, once the
+          badge reaches a storefront, to every shopper. */}
+      <Dialog
+        open={founderTarget !== null}
+        onOpenChange={(open) => !open && setFounderTarget(null)}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Founder merchant</DialogTitle>
+            <DialogDescription>
+              {founderTarget?.name} joined in{" "}
+              {founderTarget?.createdAt.getFullYear()}. The badge shows this
+              year on their storefront, so it should be the year they actually
+              joined — not the year you are granting it.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2">
+            <label htmlFor="founder-year" className="text-sm font-medium">
+              Cohort year
+            </label>
+            <Input
+              id="founder-year"
+              value={founderYear}
+              onChange={(e) => setFounderYear(e.target.value.replace(/\D/g, "").slice(0, 4))}
+              placeholder="2025"
+              inputMode="numeric"
+              className="font-mono"
+            />
+            <p className="text-xs text-muted-foreground">
+              Applies to the merchant, so it appears on every store they own.
+            </p>
+          </div>
+
+          <DialogFooter className="gap-2 sm:justify-between">
+            {founderTarget?.founderCohort ? (
+              <Button
+                variant="ghost"
+                className="text-destructive hover:text-destructive"
+                disabled={founderMutation.isPending}
+                onClick={() =>
+                  founderMutation.mutate({
+                    merchantId: founderTarget.merchantId,
+                    cohort: null,
+                  })
+                }
+              >
+                Remove badge
+              </Button>
+            ) : (
+              <span />
+            )}
+            <Button
+              disabled={founderMutation.isPending || founderYear.length !== 4}
+              onClick={() =>
+                founderTarget &&
+                founderMutation.mutate({
+                  merchantId: founderTarget.merchantId,
+                  cohort: founderYear,
+                })
+              }
+            >
+              {founderTarget?.founderCohort ? "Update year" : "Grant badge"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={showOcrDialog} onOpenChange={setShowOcrDialog}>
         <DialogContent>
           <DialogHeader>

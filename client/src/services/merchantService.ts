@@ -15,6 +15,8 @@ export interface Merchant {
   plan: string;
   lifecycleState: string | null;
   isInternal: boolean;
+  /** Founder cohort year, or null when not a founder merchant. */
+  founderCohort: string | null;
   status: "active" | "pending_approval" | "suspended" | "inactive";
   totalRevenue: number | null;
   totalOrders: number | null;
@@ -35,6 +37,8 @@ interface ApiStoreItem {
   plan: string | null;
   lifecycle_state: string | null;
   is_internal: boolean;
+  /** Founder-merchant cohort year ("2025"), or null. Lives on the tenant. */
+  founder_cohort: string | null;
   logo_url: string | null;
   total_revenue: number;
   total_orders: number;
@@ -61,6 +65,7 @@ function mapStore(store: ApiStoreItem, index: number, pageOffset: number): Merch
     plan: store.plan || "free",
     lifecycleState: store.lifecycle_state,
     isInternal: store.is_internal ?? false,
+    founderCohort: store.founder_cohort ?? null,
     status: store.status as Merchant["status"],
     totalRevenue: store.total_revenue ?? 0,
     totalOrders: store.total_orders ?? 0,
@@ -159,6 +164,26 @@ export async function toggleMerchantInternal(
   return apiClient(`/admin/stores/${merchantId}/internal`, {
     method: "PATCH",
     body: JSON.stringify({ is_internal: isInternal }),
+  });
+}
+
+/**
+ * Grant or revoke founder-merchant status.
+ *
+ * `cohort` is the merchant's JOIN YEAR ("2025"), never a rank — a rank tells
+ * merchant #42 that 41 came before them, which publishes how many merchants
+ * are on the platform. Pass null to remove the badge.
+ *
+ * Set on the TENANT, so a merchant with several stores gets the badge on all
+ * of them; the API returns the tenant it changed.
+ */
+export async function setFounderCohort(
+  merchantId: string,
+  cohort: string | null,
+): Promise<{ store_id: string; tenant_id: string; founder_cohort: string | null }> {
+  return apiClient(`/admin/stores/${merchantId}/founder`, {
+    method: "PATCH",
+    body: JSON.stringify({ founder_cohort: cohort }),
   });
 }
 
