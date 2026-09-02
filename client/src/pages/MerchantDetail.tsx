@@ -368,9 +368,21 @@ export default function MerchantDetail() {
                     label="Landing plan intent"
                     value={d.owner?.plan_intent ?? "—"}
                   />
+                  {/* `trial_ends_at` is stamped on the user row at signup and
+                      never cleared, so on a converted merchant it is a date
+                      that stopped meaning anything — a pay-as-you-go merchant
+                      has no trial at all yet still carries one. Show it only
+                      while the tenant says the trial is live; otherwise label
+                      it for what it is. */}
                   <Field
-                    label="User trial ends"
-                    value={fmtDate(d.owner?.trial_ends_at)}
+                    label={d.owner?.is_on_trial ? "Trial ends" : "Signed up under trial"}
+                    value={
+                      d.owner?.is_on_trial
+                        ? fmtDate(d.owner?.trial_ends_at)
+                        : d.owner?.trial_ends_at
+                          ? `${fmtDate(d.owner.trial_ends_at)} — converted`
+                          : "—"
+                    }
                   />
                   <Field
                     label="Last login"
