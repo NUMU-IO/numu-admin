@@ -242,7 +242,10 @@ export interface MerchantDetail {
     phone: string | null;
     status: string | null;
     plan_intent: string | null;
+    /** Signup trial stamped at registration. Never cleared on conversion. */
     trial_ends_at: string | null;
+    /** Whether the merchant is on trial *now*, per the tenant lifecycle. */
+    is_on_trial: boolean;
     last_login_at: string | null;
     created_at: string | null;
   } | null;
