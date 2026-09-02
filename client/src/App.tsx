@@ -14,6 +14,7 @@ import EmailTemplates from "./pages/EmailTemplates";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
 import MerchantDetail from "./pages/MerchantDetail";
+import Leads from "./pages/Leads";
 import Merchants from "./pages/Merchants";
 import Orders from "./pages/Orders";
 import LandingPage from "./pages/LandingPage";
@@ -87,6 +88,7 @@ function Router() {
     <Switch>
       <Route path="/login" component={Login} />
       <Route path="/">{() => <ProtectedRoute component={Home} />}</Route>
+      <Route path="/leads">{() => <ProtectedRoute component={Leads} />}</Route>
       <Route path="/merchants">
         {() => <ProtectedRoute component={Merchants} />}
       </Route>
