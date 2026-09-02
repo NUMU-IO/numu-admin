@@ -11,6 +11,7 @@ import {
   BadgeCheck,
   BarChart3,
   Building2,
+  UserPlus,
   CreditCard,
   FileText,
   Globe,
@@ -48,6 +49,7 @@ interface NavItem {
 
 const mainNavItems: NavItem[] = [
   { icon: Home, label: "Overview", href: "/" },
+  { icon: UserPlus, label: "Leads", href: "/leads" },
   { icon: Building2, label: "Merchants", href: "/merchants" },
   { icon: ShoppingCart, label: "Orders", href: "/orders" },
   { icon: Users, label: "Customers", href: "/customers" },
