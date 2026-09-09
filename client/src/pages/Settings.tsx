@@ -68,6 +68,7 @@ const DEFAULT_SETTINGS: PlatformSettings = {
   maintenance_mode: false,
   session_timeout_minutes: 60,
   max_login_attempts: 5,
+  alert_emails: ["yahya@numueg.app"],
 };
 
 export default function Settings() {
@@ -162,6 +163,13 @@ export default function Settings() {
 
   const platformSettings = draft ?? settingsQuery.data ?? DEFAULT_SETTINGS;
 
+  // The alert list is edited as one comma-separated line, so the raw text has
+  // to live here: parsing straight into the array would delete the comma the
+  // moment it is typed and make a second address impossible to enter. `null`
+  // means "not being edited", so the field follows the server value until the
+  // operator touches it.
+  const [alertEmailsText, setAlertEmailsText] = useState<string | null>(null);
+
   const setField = <K extends keyof PlatformSettings>(
     key: K,
     value: PlatformSettings[K],
@@ -180,6 +188,9 @@ export default function Settings() {
       queryClient.setQueryData(["platform-settings"], saved);
       setDraft(saved);
       setIsDirty(false);
+      // Back to following the server, which has de-duplicated and lowercased
+      // the list — the operator should see what was actually stored.
+      setAlertEmailsText(null);
       toast.success("Settings saved");
     },
     onError: (err) =>
@@ -297,6 +308,34 @@ export default function Settings() {
                       disabled={settingsQuery.isLoading}
                     />
                   </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="alertEmails">Alert Emails</Label>
+                  <Input
+                    id="alertEmails"
+                    value={
+                      alertEmailsText ??
+                      (platformSettings.alert_emails ?? []).join(", ")
+                    }
+                    onChange={(e) => {
+                      setAlertEmailsText(e.target.value);
+                      setField(
+                        "alert_emails",
+                        e.target.value
+                          .split(",")
+                          .map((address) => address.trim())
+                          .filter(Boolean),
+                      );
+                    }}
+                    placeholder="yahya@numueg.app, ops@numueg.app"
+                    disabled={settingsQuery.isLoading}
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    Emailed when a queue gets work — a new lead, a merchant
+                    registering, a payment proof, a theme submitted. Separate
+                    addresses with commas. Leave empty to turn these off.
+                  </p>
                 </div>
 
                 <div className="space-y-2">

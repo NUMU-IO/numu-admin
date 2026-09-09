@@ -16,6 +16,8 @@ export interface PlatformSettings {
   maintenance_mode: boolean;
   session_timeout_minutes: number;
   max_login_attempts: number;
+  /** Who gets emailed when an admin queue receives work. Empty = nobody. */
+  alert_emails: string[];
 }
 
 export type PlatformSettingsUpdate = Partial<PlatformSettings>;
