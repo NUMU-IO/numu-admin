@@ -145,7 +145,19 @@ export default function MerchantDetail() {
     { label: "Phone", value: dash(d.owner?.phone), mono: true },
     { label: "Status", value: dash(d.owner?.status) },
     { label: "Plan intent", value: dash(d.owner?.plan_intent) },
-    { label: "Trial ends", value: formatDateTime(d.owner?.trial_ends_at), mono: true },
+    // `trial_ends_at` is stamped on the user row at signup and never cleared,
+    // so on a converted merchant it is a date that stopped meaning anything —
+    // a pay-as-you-go merchant has no trial at all yet still carries one.
+    // Labelled for what it actually is once the tenant says the trial is over.
+    {
+      label: d.owner?.is_on_trial ? "Trial ends" : "Signed up under trial",
+      value: d.owner?.is_on_trial
+        ? formatDateTime(d.owner?.trial_ends_at)
+        : d.owner?.trial_ends_at
+          ? `${formatDateTime(d.owner.trial_ends_at)} — converted`
+          : "—",
+      mono: true,
+    },
     { label: "Last login", value: formatDateTime(d.owner?.last_login_at), mono: true },
     { label: "Registered", value: formatDateTime(d.owner?.created_at), mono: true },
   ];

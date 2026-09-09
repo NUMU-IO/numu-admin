@@ -25,6 +25,7 @@ import {
   FilterBar,
   FormField,
   IconButton,
+  Input,
   MetricCard,
   Pagination,
   Select,
@@ -36,6 +37,7 @@ import {
   getMerchantStats,
   getMerchants,
   impersonateMerchant,
+  setFounderCohort,
   setInstapayOcrProvider,
   toggleMerchantInternal,
   updateMerchantStatus,
@@ -77,6 +79,8 @@ export default function Merchants() {
   const [ocrTarget, setOcrTarget] = useState<Merchant | null>(null);
   const [ocrProvider, setOcrProvider] = useState<InstapayOcrProvider>("none");
   const [ocrPrivacyAck, setOcrPrivacyAck] = useState(false);
+  const [founderTarget, setFounderTarget] = useState<Merchant | null>(null);
+  const [founderYear, setFounderYear] = useState("");
 
   const queryParams = {
     limit: PAGE_SIZE,
@@ -137,6 +141,29 @@ export default function Merchants() {
     onError: () => toast.error("Could not change the internal flag"),
   });
 
+  // Founder-merchant badge. Not a plain toggle: granting it needs a COHORT
+  // YEAR, and the year has to be the merchant's real join year or the badge
+  // on their storefront becomes a false claim. The dialog opens pre-filled
+  // from their signup date, so the honest value is the default one.
+  const founderMutation = useMutation({
+    mutationFn: ({ id, cohort }: { id: string; cohort: string | null }) =>
+      setFounderCohort(id, cohort),
+    onSuccess: (_d, v) => {
+      toast.success(
+        v.cohort ? `Founder badge granted — class of ${v.cohort}` : "Founder badge removed",
+      );
+      setFounderTarget(null);
+      invalidate();
+    },
+    onError: () => toast.error("Could not update founder status"),
+  });
+
+  const openFounderDialog = (m: Merchant) => {
+    setFounderTarget(m);
+    // Their actual signup year, so the default is the true one.
+    setFounderYear(m.founderCohort ?? String(m.createdAt.getFullYear()));
+  };
+
   const ocrMutation = useMutation({
     mutationFn: ({ id, provider }: { id: string; provider: InstapayOcrProvider }) =>
       setInstapayOcrProvider(id, provider),
@@ -163,6 +190,16 @@ export default function Merchants() {
           <div className="ntb__primary ak-cell-line">
             <span>{m.name}</span>
             {m.isInternal ? <Badge tone="warning" icon="flag" square>Internal</Badge> : null}
+            {m.founderCohort ? (
+              <Badge
+                tone="warning"
+                icon="star"
+                square
+                title={`Founder merchant — class of ${m.founderCohort}`}
+              >
+                Founder {m.founderCohort}
+              </Badge>
+            ) : null}
           </div>
           <div className="ntb__sub numu-email">{m.email}</div>
         </div>
@@ -230,6 +267,16 @@ export default function Merchants() {
             onClick={() =>
               internalMutation.mutate({ id: m.merchantId, isInternal: !m.isInternal })
             }
+          />
+          <IconButton
+            icon="star"
+            label={
+              m.founderCohort
+                ? `Founder merchant (${m.founderCohort}) — change or remove`
+                : "Mark as a founder merchant"
+            }
+            size="sm"
+            onClick={() => openFounderDialog(m)}
           />
           <IconButton
             icon="eye"
@@ -485,6 +532,67 @@ export default function Merchants() {
             />
           </div>
         ) : null}
+      </Dialog>
+
+      {/* Founder-merchant badge. A cohort YEAR, never a rank: a rank would tell
+          merchant #42 that 41 came before them, publishing how many merchants
+          are on the platform to every merchant — and, once the badge reaches a
+          storefront, to every shopper. */}
+      <Dialog
+        open={Boolean(founderTarget)}
+        title="Founder merchant"
+        description={
+          founderTarget
+            ? `${founderTarget.name} joined in ${founderTarget.createdAt.getFullYear()}. The badge shows this year on their storefront, so it should be the year they actually joined — not the year you are granting it.`
+            : undefined
+        }
+        width={460}
+        onClose={() => setFounderTarget(null)}
+        footer={
+          <>
+            {founderTarget?.founderCohort ? (
+              <Button
+                variant="danger-outline"
+                disabled={founderMutation.isPending}
+                onClick={() =>
+                  founderMutation.mutate({ id: founderTarget.merchantId, cohort: null })
+                }
+              >
+                Remove badge
+              </Button>
+            ) : null}
+            <Button variant="ghost" onClick={() => setFounderTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              loading={founderMutation.isPending}
+              disabled={founderYear.length !== 4}
+              onClick={() =>
+                founderTarget &&
+                founderMutation.mutate({
+                  id: founderTarget.merchantId,
+                  cohort: founderYear,
+                })
+              }
+            >
+              Grant
+            </Button>
+          </>
+        }
+      >
+        <FormField
+          label="Cohort year"
+          hint="Applies to the merchant, so it appears on every store they own."
+        >
+          <Input
+            mono
+            inputMode="numeric"
+            value={founderYear}
+            onChange={(e) => setFounderYear(e.target.value.replace(/\D/g, "").slice(0, 4))}
+            placeholder="2025"
+          />
+        </FormField>
       </Dialog>
     </DashboardLayout>
   );

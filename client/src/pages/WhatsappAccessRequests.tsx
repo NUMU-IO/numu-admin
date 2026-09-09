@@ -16,6 +16,9 @@
  */
 
 import DashboardLayout from "@/components/DashboardLayout";
+import { DeviceHealthTable } from "@/components/whatsapp/DeviceHealthTable";
+import { MessageLogTable } from "@/components/whatsapp/MessageLogTable";
+import { PairMerchantNumber } from "@/components/whatsapp/PairMerchantNumber";
 import { PlatformDeviceCard } from "@/components/whatsapp/PlatformDeviceCard";
 import { TransportAssignment } from "@/components/whatsapp/TransportAssignment";
 import {
@@ -316,6 +319,25 @@ export default function WhatsappAccessRequests() {
       {/* The sending identity every merchant on the shared number depends on.
           Above the queue because if this session drops, they all stop sending. */}
       <PlatformDeviceCard />
+
+      {/* Fleet health next: a dead session is this transport's normal failure
+          mode, and it should be visible here rather than discovered when a
+          merchant reports that messages stopped. */}
+      <DeviceHealthTable />
+
+      {/* Pair without first hunting for the merchant's row below. */}
+      <PairMerchantNumber
+        stores={(requestsQuery.data?.requests ?? [])
+          .filter((r) => r.status === "approved" && r.store_id)
+          .map((r) => ({
+            id: r.store_id,
+            name: r.store_name ?? r.store_subdomain ?? r.store_id,
+          }))}
+      />
+
+      {/* "Did it actually go out, and what did WhatsApp say" — the first
+          question in most support conversations. */}
+      <MessageLogTable />
 
       {requestsQuery.isError ? (
         <Card>
