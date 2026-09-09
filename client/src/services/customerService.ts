@@ -8,6 +8,8 @@ export interface Customer {
   id: number;
   customerId: string;
   merchantId: string;
+  /** The store's name. An id is not an answer to "which merchant". */
+  merchantName: string | null;
   name: string | null;
   email: string;
   phone: string | null;
@@ -21,6 +23,7 @@ interface ApiCustomerItem {
   id: string;
   tenant_id: string;
   store_id: string;
+  store_name: string | null;
   email: string;
   first_name: string;
   last_name: string;
@@ -44,6 +47,7 @@ function mapCustomer(customer: ApiCustomerItem, index: number): Customer {
     id: index + 1,
     customerId: customer.id,
     merchantId: customer.tenant_id || customer.store_id,
+    merchantName: customer.store_name,
     name: `${customer.first_name} ${customer.last_name}`.trim() || null,
     email: customer.email,
     phone: customer.phone,

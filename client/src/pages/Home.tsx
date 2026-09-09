@@ -191,7 +191,9 @@ export default function Home() {
     >
       {/* Degraded service. Derived from measurements — this platform has no
           incident records, so nothing here claims to be a named incident. */}
-      {data?.health.map((h) => (
+      {data?.health
+        .filter((h) => h.severity !== "ok")
+        .map((h) => (
         <Banner
           key={h.id}
           tone={h.severity === "danger" ? "danger" : "warning"}
@@ -248,7 +250,7 @@ export default function Home() {
           loading={isLoading}
           sparkline={
             m?.orders_today.spark.length ? (
-              <Sparkline data={m.orders_today.spark} area label="Orders per hour today" />
+              <Sparkline data={m.orders_today.spark} area label="Order value per day, last 14 days" />
             ) : undefined
           }
           onClick={() => navigate("/orders")}
@@ -421,7 +423,7 @@ export default function Home() {
 
       {/* Two monitoring charts. */}
       <div className="ak-2col">
-        <Card title="Orders per hour" subtitle="Today · all stores">
+        <Card title="Orders per day" subtitle="Last 14 days · all stores">
           {isLoading ? (
             <Skeleton height={190} variant="block" />
           ) : (
@@ -429,7 +431,7 @@ export default function Home() {
               data={data?.orders_per_hour ?? []}
               height={190}
               gridLines={2}
-              label={`Orders per hour today. ${formatNumber(m?.orders_today.value)} so far.`}
+              label={`Orders per day over the last fortnight. ${formatNumber(m?.orders_today.value)} today.`}
               formatValue={formatCompact}
             />
           )}
@@ -546,15 +548,40 @@ export default function Home() {
               <Skeleton lines={4} />
             </div>
           ) : data?.health.length ? (
+            /* Every signal, with its current reading — including the healthy
+               ones. An empty card until something broke made "all clear" and
+               "the query returned nothing" look identical, and hid the
+               difference between a 2% failure rate and a 9% one on its way to
+               breaching. */
             <div className="ak-feed">
               {data.health.map((h) => (
                 <div key={h.id} className="ak-feed__row">
-                  <span className="ak-feed__dot ak-feed__dot--danger" />
+                  <span
+                    className={`ak-feed__dot ak-feed__dot--${
+                      h.severity === "danger"
+                        ? "danger"
+                        : h.severity === "warning"
+                          ? "warning"
+                          : "ok"
+                    }`}
+                  />
                   <div className="ak-feed__body">
                     <div className="ak-cell-line">
                       <StatusBadge
-                        status={h.severity === "danger" ? "down" : "degraded"}
-                        label={h.severity === "danger" ? "Degraded" : "Watch"}
+                        status={
+                          h.severity === "danger"
+                            ? "down"
+                            : h.severity === "warning"
+                              ? "degraded"
+                              : "healthy"
+                        }
+                        label={
+                          h.severity === "danger"
+                            ? "Degraded"
+                            : h.severity === "warning"
+                              ? "Watch"
+                              : "Normal"
+                        }
                       />
                       <span className="numu-label">{h.id}</span>
                     </div>
@@ -566,10 +593,10 @@ export default function Home() {
             </div>
           ) : (
             <EmptyState
-              kind="empty"
+              kind="error"
               icon="activity"
-              title="All signals within tolerance"
-              body="Payment failure and webhook delivery rates are both normal."
+              title="No signals reported"
+              body="The overview returned no health readings at all, which is itself worth looking at."
             />
           )}
         </Card>

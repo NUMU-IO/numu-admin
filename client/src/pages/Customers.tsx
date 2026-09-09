@@ -65,7 +65,17 @@ export default function Customers() {
       mono: true,
       render: (c) => (c.phone ? <span className="numu-phone">{c.phone}</span> : "—"),
     },
-    { key: "merchantId", header: "Merchant", mono: true },
+    {
+      key: "merchantId",
+      header: "Merchant",
+      // The store's NAME. This column carried a raw tenant UUID, which is not
+      // an answer to "which merchant" — it is the same 36 characters for
+      // every row of a store and unreadable across a table. The id stays
+      // available on hover for the times it is the thing being matched.
+      render: (c) => (
+        <span title={c.merchantId}>{c.merchantName ?? c.merchantId}</span>
+      ),
+    },
     {
       key: "totalOrders",
       header: "Orders",

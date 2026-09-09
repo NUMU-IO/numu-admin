@@ -591,6 +591,11 @@ body {
 .ak-feed__dot--info {
   border-color: var(--status-info);
 }
+/* A signal that was measured and is fine. Sage, so a healthy reading reads as
+   an answer rather than as an absence. */
+.ak-feed__dot--ok {
+  background: var(--status-success);
+}
 .ak-feed__dot--warning {
   border-color: var(--status-warning);
   background: var(--status-warning);
