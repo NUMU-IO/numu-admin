@@ -219,16 +219,40 @@ export default function Leads() {
       render: (l) => l.sells_what ?? "—",
     },
     {
+      // The number itself, not a badge saying one exists. The API has sent
+      // `phone` all along and this page rendered a "Phone ✓" chip from it, so
+      // the one thing an operator opens this table to do — call the lead who
+      // signed up an hour ago — had to be done from the database.
       key: "has_phone",
-      header: "Reachable",
-      render: (l) =>
-        l.has_phone ? (
-          <StatusBadge status="verified" label="Phone" icon="phone" />
-        ) : (
-          <Badge tone="neutral" square>
-            email only
-          </Badge>
-        ),
+      header: "Phone",
+      render: (l) => {
+        const phone = l.phone ?? l.whatsapp_phone;
+        if (!phone) {
+          return (
+            <Badge tone="neutral" square>
+              email only
+            </Badge>
+          );
+        }
+        // A second number only earns a line when it differs — most leads give
+        // the same one twice, and repeating it is noise in a dense table.
+        const whatsapp =
+          l.whatsapp_phone && l.whatsapp_phone !== l.phone ? l.whatsapp_phone : null;
+        return (
+          <div>
+            {/* dir=ltr: an E.164 number inside any RTL run renders with the
+                leading + thrown to the wrong end. */}
+            <a className="numu-mono" href={`tel:${phone}`} dir="ltr">
+              {phone}
+            </a>
+            {whatsapp ? (
+              <div className="ntb__sub numu-mono" dir="ltr">
+                WhatsApp {whatsapp}
+              </div>
+            ) : null}
+          </div>
+        );
+      },
     },
     {
       key: "created_at",
