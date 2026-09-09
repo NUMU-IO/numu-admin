@@ -231,7 +231,21 @@ export default function Merchants() {
     {
       key: "plan",
       header: "Plan",
-      render: (m) => <Badge tone="neutral" square>{m.plan}</Badge>,
+      render: (m) => (
+        <div className="ak-cell-line">
+          <Badge tone="neutral" square>{m.plan}</Badge>
+          {/* A trial without its remaining days answers "are they paying?"
+              and not "when do I need to call them?", which is the question
+              this screen exists for. Under a week reads as a warning. */}
+          {m.trialDaysRemaining !== null ? (
+            <Badge tone={m.trialDaysRemaining <= 7 ? "warning" : "info"} square>
+              {m.trialDaysRemaining === 0
+                ? "ends today"
+                : `${m.trialDaysRemaining}d left`}
+            </Badge>
+          ) : null}
+        </div>
+      ),
     },
     {
       key: "totalRevenue",
@@ -610,7 +624,9 @@ function exportCsv(rows: Merchant[]) {
     toast.message("Nothing to export", { description: "The current view is empty." });
     return;
   }
-  const header = ["store_id", "name", "email", "domain", "status", "plan", "revenue_piasters", "orders", "created_at"];
+  // trial_ends_at rides along so a call list can be sorted by it in a sheet,
+  // which is what the export is for.
+  const header = ["store_id", "name", "email", "domain", "status", "plan", "trial_ends_at", "revenue_piasters", "orders", "created_at"];
   const body = rows.map((m) =>
     [
       m.merchantId,
@@ -619,6 +635,7 @@ function exportCsv(rows: Merchant[]) {
       m.domain ?? "",
       m.status,
       m.plan,
+      m.trialEndsAt ?? "",
       String(m.totalRevenue ?? 0),
       String(m.totalOrders ?? 0),
       m.createdAt.toISOString(),
