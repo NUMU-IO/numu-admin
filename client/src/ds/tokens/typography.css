@@ -1,0 +1,85 @@
+/* Font faces are loaded via a <link> in client/index.html so the bundler
+   does not have to hoist a remote @import. */
+
+/* PRIMITIVE — font families
+   Reem Kufi   display / brand / wordmark (Latin + Arabic, one face for both)
+   Tajawal     Arabic UI + Arabic body
+   Space Grotesk  English UI + English body
+   JetBrains Mono  IDs, timestamps, metadata, webhook payloads, audit rows
+   NOTE: the mono face was not specified in the supplied brand material.
+   JetBrains Mono is a substitution — see readme.md "Font substitutions". */
+:root {
+  --ff-display: "Reem Kufi", "Tajawal", system-ui, sans-serif; /* @kind font */
+  --ff-arabic: "Tajawal", "Reem Kufi", system-ui, sans-serif; /* @kind font */
+  --ff-latin: "Space Grotesk", system-ui, -apple-system, sans-serif; /* @kind font */
+  --ff-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace; /* @kind font */
+
+  /* PRIMITIVE — weights */
+  --fw-light: 300; /* @kind font */
+  --fw-regular: 400; /* @kind font */
+  --fw-medium: 500; /* @kind font */
+  --fw-semibold: 600; /* @kind font */
+  --fw-bold: 700; /* @kind font */
+
+  /* PRIMITIVE — type scale (marketing / editorial sizes) */
+  --fs-display-xl: 96px; /* @kind font */
+  --lh-display-xl: 0.98; /* @kind other */
+  --fs-display-l: 64px; /* @kind font */
+  --lh-display-l: 1; /* @kind other */
+  --fs-title-l: 36px; /* @kind font */
+  --lh-title-l: 1.1; /* @kind other */
+  --fs-title-m: 28px; /* @kind font */
+  --lh-title-m: 1.15; /* @kind other */
+  --fs-title-s: 22px; /* @kind font */
+  --lh-title-s: 1.2; /* @kind other */
+  --fs-body-l: 18px; /* @kind font */
+  --lh-body-l: 1.55; /* @kind other */
+  --fs-body-m: 15px; /* @kind font */
+  --lh-body-m: 1.5; /* @kind other */
+  --fs-body-s: 13px; /* @kind font */
+  --lh-body-s: 1.45; /* @kind other */
+  --fs-label-mono: 12px; /* @kind font */
+  --lh-label-mono: 1.4; /* @kind other */
+
+  /* PRIMITIVE — admin/app scale. The operational admin runs 1–3 steps tighter
+     than marketing: information density beats presence. */
+  --fs-app-h1: 22px; /* @kind font */
+  --fs-app-h2: 17px; /* @kind font */
+  --fs-app-h3: 15px; /* @kind font */
+  --fs-app-body: 14px; /* @kind font */
+  --fs-app-sm: 13px; /* @kind font */
+  --fs-app-xs: 12px; /* @kind font */
+  --fs-app-mono: 12px; /* @kind font */
+  --fs-app-mono-sm: 11px; /* @kind font */
+  --fs-app-meta: 10px; /* @kind font */
+
+  /* PRIMITIVE — tracking. Mono labels are always widely tracked + uppercase. */
+  --ls-display: -0.03em; /* @kind other */
+  --ls-title: -0.01em; /* @kind other */
+  --ls-normal: 0; /* @kind other */
+  --ls-mono: 0.08em; /* @kind other */
+  --ls-label: 0.16em; /* @kind other */
+  --ls-kicker: 0.22em; /* @kind other */
+
+  /* Arabic runs longer and taller than Latin at the same px size.
+     Add a line-height step and 1px when a block is Arabic-primary. */
+  --lh-arabic-bump: 0.1; /* @kind other */
+}
+
+/* SEMANTIC — text roles */
+:root {
+  --font-brand: var(--ff-display); /* @kind font */
+  --font-heading: var(--ff-display); /* @kind font */
+  --font-ui: var(--ff-latin); /* @kind font */
+  --font-ui-ar: var(--ff-arabic); /* @kind font */
+  --font-body: var(--ff-latin); /* @kind font */
+  --font-body-ar: var(--ff-arabic); /* @kind font */
+  --font-data: var(--ff-mono); /* @kind font */
+}
+
+/* Direction-aware UI font: an [lang="ar"] / [dir="rtl"] subtree swaps to Tajawal
+   automatically so components never have to branch on locale. */
+:where([lang="ar"], [dir="rtl"]) {
+  --font-ui: var(--ff-arabic); /* @kind font */
+  --font-body: var(--ff-arabic); /* @kind font */
+}

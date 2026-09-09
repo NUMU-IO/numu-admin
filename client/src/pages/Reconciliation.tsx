@@ -10,6 +10,7 @@
  */
 
 import DashboardLayout from "@/components/DashboardLayout";
+import { Badge as NumuBadge, MetricCard, StatusBadge } from "@/ds";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -47,15 +48,12 @@ import {
 import {
   Activity,
   AlertTriangle,
-  CheckCircle2,
   ChevronDown,
   ChevronRight,
   Loader2,
   Play,
   RefreshCw,
   Scale,
-  TrendingDown,
-  XCircle,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -90,50 +88,38 @@ function formatDateTime(iso: string): string {
 // ── Status badge ──────────────────────────────────────────────────────────────
 
 function RunStatusBadge({ run }: { run: AdminReconciliationRun }) {
-  if (run.status === "failed") {
-    return (
-      <Badge className="bg-red-100 text-red-700 gap-1 w-fit">
-        <XCircle className="h-3 w-3" /> Failed
-      </Badge>
-    );
-  }
-  if (run.status === "running") {
-    return (
-      <Badge className="bg-blue-100 text-blue-700 gap-1 w-fit">
-        <Activity className="h-3 w-3" /> Running
-      </Badge>
-    );
-  }
-  if (run.mismatches_found === 0) {
-    return (
-      <Badge className="bg-emerald-100 text-emerald-700 gap-1 w-fit">
-        <CheckCircle2 className="h-3 w-3" /> Clean
-      </Badge>
-    );
-  }
+  if (run.status === "failed") return <StatusBadge status="failed" />;
+  if (run.status === "running") return <StatusBadge status="retrying" label="Running" />;
+  if (run.mismatches_found === 0) return <StatusBadge status="healthy" label="Clean" />;
   return (
-    <Badge className="bg-amber-100 text-amber-700 gap-1 w-fit">
-      <AlertTriangle className="h-3 w-3" />
-      {run.mismatches_found} mismatch{run.mismatches_found !== 1 ? "es" : ""}
-    </Badge>
+    <StatusBadge
+      status="degraded"
+      label={`${run.mismatches_found} mismatch${run.mismatches_found !== 1 ? "es" : ""}`}
+    />
   );
 }
 
 // ── Mismatch type label ───────────────────────────────────────────────────────
 
-const MISMATCH_LABELS: Record<MismatchType, { label: string; color: string }> = {
-  amount_mismatch: { label: "Amount Mismatch", color: "bg-amber-100 text-amber-700" },
-  missing_transaction: { label: "Missing Transaction", color: "bg-red-100 text-red-700" },
-  missing_order: { label: "Missing Order", color: "bg-orange-100 text-orange-700" },
-  duplicate_transaction: { label: "Duplicate", color: "bg-purple-100 text-purple-700" },
+/* Tone grades how bad the mismatch is, not what kind it is: a missing
+   transaction is money the gateway never saw, an amount mismatch is money
+   that does not add up, and a duplicate is a reconciliation artefact. */
+const MISMATCH_LABELS: Record<
+  MismatchType,
+  { label: string; tone: "warning" | "danger" | "neutral" }
+> = {
+  amount_mismatch: { label: "Amount", tone: "warning" },
+  missing_transaction: { label: "No transaction", tone: "danger" },
+  missing_order: { label: "No order", tone: "danger" },
+  duplicate_transaction: { label: "Duplicate", tone: "neutral" },
 };
 
 function MismatchTypeBadge({ type }: { type: string }) {
   const cfg = MISMATCH_LABELS[type as MismatchType];
   return (
-    <Badge className={`text-xs w-fit ${cfg?.color ?? "bg-gray-100 text-gray-700"}`}>
+    <NumuBadge tone={cfg?.tone ?? "neutral"} square>
       {cfg?.label ?? type}
-    </Badge>
+    </NumuBadge>
   );
 }
 
@@ -239,13 +225,7 @@ function MismatchPanel({
                     : "—"}
                 </TableCell>
                 <TableCell>
-                  {m.resolved ? (
-                    <Badge className="bg-emerald-100 text-emerald-700 text-xs">
-                      Resolved
-                    </Badge>
-                  ) : (
-                    <Badge className="bg-amber-100 text-amber-700 text-xs">Open</Badge>
-                  )}
+                  <StatusBadge status={m.resolved ? "resolved" : "open"} />
                 </TableCell>
                 <TableCell className="text-muted-foreground max-w-[120px]">
                   {m.resolved_by ? (
@@ -305,7 +285,9 @@ function RunRow({
           {formatDate(run.period_end)}
         </TableCell>
         <TableCell>
-          <Badge className="bg-blue-50 text-blue-700 text-xs capitalize">{run.gateway}</Badge>
+          <NumuBadge tone="info" square>
+            {run.gateway}
+          </NumuBadge>
         </TableCell>
         <TableCell>
           <RunStatusBadge run={run} />
@@ -413,68 +395,50 @@ export default function Reconciliation() {
   );
   const totalMismatches = runs.reduce((acc, r) => acc + r.mismatches_found, 0);
 
-  const kpis = [
-    {
-      label: "Total Runs",
-      value: totalRuns,
-      sub: `${cleanRuns} clean`,
-      icon: Activity,
-      color: "bg-blue-50",
-      iconColor: "text-blue-600",
-    },
-    {
-      label: "Clean Runs",
-      value: cleanRuns,
-      sub: "Zero mismatches",
-      icon: CheckCircle2,
-      color: "bg-emerald-50",
-      iconColor: "text-emerald-600",
-    },
-    {
-      label: "Total Mismatches",
-      value: totalMismatches,
-      sub: `across ${runsWithMismatches} run${runsWithMismatches !== 1 ? "s" : ""}`,
-      icon: AlertTriangle,
-      color: runsWithMismatches > 0 ? "bg-amber-50" : "bg-gray-50",
-      iconColor: runsWithMismatches > 0 ? "text-amber-600" : "text-muted-foreground",
-    },
-    {
-      label: "Failed Runs",
-      value: failedRuns,
-      sub: failedRuns > 0 ? "Needs attention" : "All passed",
-      icon: XCircle,
-      color: failedRuns > 0 ? "bg-red-50" : "bg-gray-50",
-      iconColor: failedRuns > 0 ? "text-red-600" : "text-muted-foreground",
-    },
-    {
-      label: "Total Variance",
-      value: formatCents(totalVariance),
-      sub: "Abs. sum all runs",
-      icon: TrendingDown,
-      color: totalVariance > 0 ? "bg-red-50" : "bg-emerald-50",
-      iconColor: totalVariance > 0 ? "text-red-600" : "text-emerald-600",
-    },
-  ];
-
   return (
     <DashboardLayout
-      title="Payment Reconciliation"
-      subtitle="Daily comparison of PAID orders vs payment gateway transactions"
+      title="Payment reconciliation"
+      subtitle="Paid orders against gateway transactions, run daily."
     >
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-        {kpis.map((kpi) => (
-          <div key={kpi.label} className="dashboard-card flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-lg ${kpi.color} flex items-center justify-center shrink-0`}>
-              <kpi.icon className={`w-5 h-5 ${kpi.iconColor}`} />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs text-muted-foreground truncate">{kpi.label}</p>
-              <p className="text-xl font-bold truncate">{kpi.value}</p>
-              <p className="text-[11px] text-muted-foreground truncate">{kpi.sub}</p>
-            </div>
-          </div>
-        ))}
+      <div className="ak-metrics">
+        <MetricCard
+          label="Runs"
+          value={totalRuns}
+          note={`${cleanRuns} clean`}
+          icon="activity"
+          flat
+        />
+        <MetricCard
+          label="Clean runs"
+          value={cleanRuns}
+          note="zero mismatches"
+          icon="check"
+          flat
+        />
+        <MetricCard
+          label="Mismatches"
+          value={totalMismatches}
+          note={`across ${runsWithMismatches} run${runsWithMismatches !== 1 ? "s" : ""}`}
+          icon="alertTriangle"
+          alert={totalMismatches > 0}
+          flat
+        />
+        <MetricCard
+          label="Failed runs"
+          value={failedRuns}
+          note={failedRuns > 0 ? "needs an operator" : "all passed"}
+          icon="x"
+          alert={failedRuns > 0}
+          flat
+        />
+        <MetricCard
+          label="Total variance"
+          value={formatCents(totalVariance)}
+          note="absolute, all runs"
+          icon="trendingDown"
+          alert={totalVariance > 0}
+          flat
+        />
       </div>
 
       {/* Controls */}

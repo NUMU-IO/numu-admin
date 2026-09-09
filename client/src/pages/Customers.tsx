@@ -1,254 +1,171 @@
 /**
- * Customers Page - NUMU Admin Dashboard
- * 
- * Features:
- * - List all customers across merchants
- * - Search and filter customers
- * - View customer details
+ * Customers — shoppers, across every merchant.
+ *
+ * The identifier an operator holds is almost always a phone number, so the
+ * phone column is mono and LTR-isolated: an Egyptian number inside an Arabic
+ * name would otherwise be reordered by the bidi algorithm and stop matching
+ * what the operator pasted in.
  */
 
-import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
-import { DashboardLayoutSkeleton } from "@/components/DashboardLayoutSkeleton";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { getLoginUrl } from "@/const";
+  Button,
+  Card,
+  DataTable,
+  EmptyState,
+  FilterBar,
+  MetricCard,
+  Pagination,
+  type DataTableColumn,
+} from "@/ds";
+import { formatDate, formatMoneyShort, formatNumber } from "@/lib/format";
+import { getCustomerStats, getCustomers, type Customer } from "@/services/customerService";
 import { useQuery } from "@tanstack/react-query";
-import { getCustomers, getCustomerStats } from "@/services/customerService";
-import {
-  ChevronLeft,
-  ChevronRight,
-  Mail,
-  Phone,
-  Search,
-  ShoppingBag,
-  User,
-  Users,
-} from "lucide-react";
 import { useState } from "react";
+import { useSearch } from "wouter";
+
+const PAGE_SIZE = 20;
 
 export default function Customers() {
-  const { user, loading, isAuthenticated } = useAuth();
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(0);
-
-  const limit = 10;
+  const searchString = useSearch();
+  const [search, setSearch] = useState(
+    () => new URLSearchParams(searchString).get("q") ?? "",
+  );
+  const [page, setPage] = useState(1);
 
   const queryParams = {
-    limit,
-    offset: page * limit,
+    limit: PAGE_SIZE,
+    offset: (page - 1) * PAGE_SIZE,
     search: search || undefined,
   };
 
-  // Fetch customers
   const { data, isLoading } = useQuery({
     queryKey: ["customers", "list", queryParams],
     queryFn: () => getCustomers(queryParams),
-    enabled: isAuthenticated,
   });
-
-  // Fetch customer stats
   const { data: stats } = useQuery({
     queryKey: ["customers", "stats"],
     queryFn: getCustomerStats,
-    enabled: isAuthenticated,
   });
 
-  // Show loading skeleton while checking auth
-  if (loading) {
-    return <DashboardLayoutSkeleton />;
-  }
-
-  // Redirect to login if not authenticated
-  if (!isAuthenticated) {
-    const loginUrl = getLoginUrl();
-    if (loginUrl) {
-      window.location.href = loginUrl;
-      return <DashboardLayoutSkeleton />;
-    }
-    // No OAuth configured (local dev) — render page with empty data
-  }
+  const columns: DataTableColumn<Customer>[] = [
+    {
+      key: "name",
+      header: "Customer",
+      render: (c) => (
+        <div>
+          <div className="ntb__primary">{c.name || "—"}</div>
+          <div className="ntb__sub numu-email">{c.email}</div>
+        </div>
+      ),
+    },
+    {
+      key: "phone",
+      header: "Phone",
+      mono: true,
+      render: (c) => (c.phone ? <span className="numu-phone">{c.phone}</span> : "—"),
+    },
+    { key: "merchantId", header: "Merchant", mono: true },
+    {
+      key: "totalOrders",
+      header: "Orders",
+      align: "end",
+      mono: true,
+      render: (c) => formatNumber(c.totalOrders),
+    },
+    {
+      key: "totalSpent",
+      header: "Spent",
+      align: "end",
+      mono: true,
+      render: (c) => formatMoneyShort(c.totalSpent),
+    },
+    {
+      key: "createdAt",
+      header: "First seen",
+      mono: true,
+      render: (c) => formatDate(c.createdAt),
+    },
+  ];
 
   const customers = data?.customers ?? [];
-  const total = data?.total ?? 0;
-  const totalPages = Math.ceil(total / limit);
-
-  const formatCurrency = (cents: number) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      minimumFractionDigits: 0,
-    }).format(cents / 100);
-  };
+  const repeat = customers.filter((c) => (c.totalOrders ?? 0) > 1).length;
 
   return (
     <DashboardLayout
       title="Customers"
-      subtitle="View all customers across the platform"
+      subtitle="Shoppers across every merchant storefront."
     >
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <div className="dashboard-card flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center">
-            <Users className="w-6 h-6 text-blue-600" />
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground">Total Customers</p>
-            <p className="text-2xl font-bold">{stats?.total ?? 0}</p>
-          </div>
-        </div>
-        <div className="dashboard-card flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center">
-            <User className="w-6 h-6 text-emerald-600" />
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground">Active Customers</p>
-            <p className="text-2xl font-bold text-emerald-600">{stats?.active ?? 0}</p>
-          </div>
-        </div>
+      <div className="ak-metrics ak-metrics--4">
+        <MetricCard
+          label="Total customers"
+          value={formatNumber(stats?.total)}
+          icon="users"
+          flat
+        />
+        <MetricCard
+          label="On this page"
+          value={formatNumber(customers.length)}
+          icon="user"
+          flat
+        />
+        <MetricCard
+          label="Repeat buyers here"
+          value={formatNumber(repeat)}
+          note="more than one order"
+          icon="refresh"
+          flat
+        />
+        <MetricCard
+          label="Page"
+          value={`${page} / ${Math.max(1, Math.ceil((data?.total ?? 0) / PAGE_SIZE))}`}
+          icon="fileText"
+          flat
+        />
       </div>
 
-      {/* Search */}
-      <div className="dashboard-card mb-6">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Search customers by name or email..."
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(0);
-            }}
-            className="pl-10"
-          />
-        </div>
-      </div>
-
-      {/* Customers Table */}
-      <div className="dashboard-card">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Customer</TableHead>
-              <TableHead>Contact</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Orders</TableHead>
-              <TableHead>Total Spent</TableHead>
-              <TableHead>Joined</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center py-8">
-                  Loading customers...
-                </TableCell>
-              </TableRow>
-            ) : customers.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                  No customers found
-                </TableCell>
-              </TableRow>
-            ) : (
-              customers.map((customer) => (
-                <TableRow key={customer.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/20 to-primary/40 flex items-center justify-center">
-                        <span className="text-sm font-semibold text-primary">
-                          {(customer.name || customer.email).substring(0, 2).toUpperCase()}
-                        </span>
-                      </div>
-                      <div>
-                        <p className="font-medium">{customer.name || "Guest"}</p>
-                        <p className="text-sm text-muted-foreground font-mono">
-                          {customer.customerId.substring(0, 8)}
-                        </p>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2 text-sm">
-                        <Mail className="w-3 h-3 text-muted-foreground" />
-                        {customer.email}
-                      </div>
-                      {customer.phone && (
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Phone className="w-3 h-3" />
-                          {customer.phone}
-                        </div>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      className={
-                        customer.status === "active"
-                          ? "bg-emerald-100 text-emerald-700"
-                          : "bg-gray-100 text-gray-700"
-                      }
-                    >
-                      {customer.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <ShoppingBag className="w-4 h-4 text-muted-foreground" />
-                      {customer.totalOrders ?? 0}
-                    </div>
-                  </TableCell>
-                  <TableCell className="font-medium">
-                    {formatCurrency(customer.totalSpent ?? 0)}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {new Date(customer.createdAt).toLocaleDateString()}
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between mt-4 pt-4 border-t">
-            <p className="text-sm text-muted-foreground">
-              Showing {page * limit + 1} to {Math.min((page + 1) * limit, total)} of {total} customers
-            </p>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage((p) => Math.max(0, p - 1))}
-                disabled={page === 0}
-              >
-                <ChevronLeft className="w-4 h-4" />
-                Previous
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-                disabled={page >= totalPages - 1}
-              >
-                Next
-                <ChevronRight className="w-4 h-4" />
-              </Button>
-            </div>
-          </div>
-        )}
-      </div>
+      <Card flush>
+        <FilterBar
+          search={search}
+          onSearchChange={(v) => {
+            setSearch(v);
+            setPage(1);
+          }}
+          searchPlaceholder="Name, email or phone"
+          actions={<span className="numu-label">Read only</span>}
+        />
+        <DataTable
+          columns={columns}
+          rows={customers}
+          rowKey={(c) => c.customerId}
+          loading={isLoading}
+          caption="Customers across all merchants"
+          empty={
+            <EmptyState
+              kind={search ? "noResults" : "empty"}
+              title={search ? "Nothing matches" : "No customers yet"}
+              body={
+                search
+                  ? "Phone numbers match in E.164 form, e.g. +2010…"
+                  : "A customer appears here after their first checkout on any storefront."
+              }
+              action={
+                search ? (
+                  <Button size="sm" variant="subtle" onClick={() => setSearch("")}>
+                    Clear search
+                  </Button>
+                ) : undefined
+              }
+            />
+          }
+        />
+        <Pagination
+          page={page}
+          pageSize={PAGE_SIZE}
+          total={data?.total ?? 0}
+          onPageChange={setPage}
+        />
+      </Card>
     </DashboardLayout>
   );
 }

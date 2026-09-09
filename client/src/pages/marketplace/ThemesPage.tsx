@@ -33,6 +33,11 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import DashboardLayout from "@/components/DashboardLayout";
+import {
+  Button as NumuButton,
+  Card as NumuCard,
+  EmptyState,
+} from "@/ds";
 import { DashboardLayoutSkeleton } from "@/components/DashboardLayoutSkeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -114,49 +119,43 @@ export default function ThemesPage() {
     platformConfigQuery.data?.default_marketplace_theme_id ?? null;
 
   return (
-    <DashboardLayout title="Marketplace themes">
-      <div className="p-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold">Marketplace themes</h1>
-            <p className="text-sm text-muted-foreground">
-              Set price (Free ↔ N EGP), mark a platform default, and flip
-              the rollout gates. New themes default to invisible — flip
-              catalog_visible to surface them to merchants.
-            </p>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              themesQuery.refetch();
-              platformConfigQuery.refetch();
-            }}
-          >
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Refresh
-          </Button>
+    <DashboardLayout
+      title="Marketplace themes"
+      subtitle="Price, platform default and rollout gates. A new theme is invisible until catalog_visible is on."
+      actions={
+        <NumuButton
+          variant="subtle"
+          icon="refresh"
+          loading={themesQuery.isFetching || platformConfigQuery.isFetching}
+          onClick={() => {
+            themesQuery.refetch();
+            platformConfigQuery.refetch();
+          }}
+        >
+          Refresh
+        </NumuButton>
+      }
+    >
+      {themes.length === 0 ? (
+        <NumuCard>
+          <EmptyState
+            kind="empty"
+            icon="package"
+            title="No marketplace themes yet"
+            body="A developer submits one with `numu-theme submit`; it lands in the review queue first."
+          />
+        </NumuCard>
+      ) : (
+        <div className="ak-stack">
+          {themes.map((theme) => (
+            <ThemeRow
+              key={theme.id}
+              theme={theme}
+              currentDefaultId={currentDefaultId}
+            />
+          ))}
         </div>
-
-        {themes.length === 0 ? (
-          <Card>
-            <CardContent className="py-12 text-center text-muted-foreground">
-              No marketplace themes yet. Submit one via{" "}
-              <code>numu-theme submit</code>.
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-3">
-            {themes.map((theme) => (
-              <ThemeRow
-                key={theme.id}
-                theme={theme}
-                currentDefaultId={currentDefaultId}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+      )}
     </DashboardLayout>
   );
 }

@@ -1,496 +1,378 @@
 /**
- * Orders Page - NUMU Admin Dashboard
- * 
- * Features:
- * - List all orders with search and filters
- * - View order details
- * - Update order status
- * - Filter by date range
+ * Orders — the platform-wide order list.
+ *
+ * Support agents arrive here with an order number from a WhatsApp message,
+ * so search is the first control and the order number is the first column.
+ * Status changes are reversible and stay a one-step action; deletion is not
+ * reversible and is gated behind a typed confirmation naming the order.
  */
 
-import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
-import { DashboardLayoutSkeleton } from "@/components/DashboardLayoutSkeleton";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
+  Button,
+  Card,
+  ConfirmDialog,
+  DataTable,
   Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import {
+  EmptyState,
+  FilterBar,
+  FormField,
+  IconButton,
+  MetricCard,
+  NUMU_STATUS,
+  Pagination,
   Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  StatusBadge,
+  type DataTableColumn,
+} from "@/ds";
+import { formatDateTime, formatMoney, formatNumber } from "@/lib/format";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { getLoginUrl } from "@/const";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getOrders, getOrderStats, updateOrderStatus, deleteOrder } from "@/services/orderService";
-import {
-  AlertCircle,
-  CheckCircle,
-  ChevronLeft,
-  ChevronRight,
-  Clock,
-  MoreHorizontal,
-  Package,
-  Search,
-  ShoppingCart,
-  Trash2,
-  Truck,
-  XCircle,
-} from "lucide-react";
+  deleteOrder,
+  getOrderStats,
+  getOrders,
+  updateOrderStatus,
+  type Order,
+} from "@/services/orderService";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
+import { useLocation, useSearch } from "wouter";
 
-const statusConfig: Record<string, { color: string; icon: React.ElementType }> = {
-  pending: { color: "bg-amber-100 text-amber-700", icon: Clock },
-  processing: { color: "bg-blue-100 text-blue-700", icon: Package },
-  shipped: { color: "bg-purple-100 text-purple-700", icon: Truck },
-  delivered: { color: "bg-emerald-100 text-emerald-700", icon: CheckCircle },
-  cancelled: { color: "bg-red-100 text-red-700", icon: XCircle },
-  refunded: { color: "bg-gray-100 text-gray-700", icon: AlertCircle },
+type NumuStatus = keyof typeof NUMU_STATUS;
+
+const ORDER_STATUS: Record<string, NumuStatus> = {
+  pending: "pending",
+  processing: "in_review",
+  shipped: "shipped",
+  delivered: "delivered",
+  cancelled: "cancelled",
+  refunded: "refunded",
+  payment_failed: "failed",
 };
 
-const paymentStatusColors: Record<string, string> = {
-  pending: "bg-amber-100 text-amber-700",
-  paid: "bg-emerald-100 text-emerald-700",
-  failed: "bg-red-100 text-red-700",
-  refunded: "bg-gray-100 text-gray-700",
+const PAYMENT_STATUS: Record<string, NumuStatus> = {
+  paid: "paid",
+  pending: "pending",
+  failed: "failed",
+  refunded: "refunded",
 };
+
+const VIEWS = [
+  { id: "all", label: "All orders" },
+  { id: "pending", label: "Pending" },
+  { id: "processing", label: "Processing" },
+  { id: "shipped", label: "Shipped" },
+  { id: "delivered", label: "Delivered" },
+  { id: "cancelled", label: "Cancelled" },
+];
+
+const NEXT_STATUS = [
+  { value: "pending", label: "Pending" },
+  { value: "processing", label: "Processing" },
+  { value: "shipped", label: "Shipped" },
+  { value: "delivered", label: "Delivered" },
+  { value: "cancelled", label: "Cancelled" },
+  { value: "refunded", label: "Refunded" },
+];
+
+const PAGE_SIZE = 20;
 
 export default function Orders() {
-  const { user, loading, isAuthenticated } = useAuth();
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [page, setPage] = useState(0);
-  const [selectedOrder, setSelectedOrder] = useState<any>(null);
-  const [showStatusDialog, setShowStatusDialog] = useState(false);
-  const [newStatus, setNewStatus] = useState<string>("");
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [orderToDelete, setOrderToDelete] = useState<any>(null);
-
-  const limit = 10;
-
+  const [, navigate] = useLocation();
   const queryClient = useQueryClient();
 
+  // The command palette links here with `?q=<order number>`, so the search
+  // box starts from the URL rather than empty.
+  const searchString = useSearch();
+  const [search, setSearch] = useState(
+    () => new URLSearchParams(searchString).get("q") ?? "",
+  );
+  const [view, setView] = useState("all");
+  const [page, setPage] = useState(1);
+
+  const [editing, setEditing] = useState<Order | null>(null);
+  const [nextStatus, setNextStatus] = useState("pending");
+  const [deleting, setDeleting] = useState<Order | null>(null);
+
   const queryParams = {
-    limit,
-    offset: page * limit,
-    status: statusFilter !== "all" ? statusFilter : undefined,
+    limit: PAGE_SIZE,
+    offset: (page - 1) * PAGE_SIZE,
+    status: view !== "all" ? view : undefined,
     search: search || undefined,
   };
 
-  // Fetch orders
   const { data, isLoading } = useQuery({
     queryKey: ["orders", "list", queryParams],
     queryFn: () => getOrders(queryParams),
-    enabled: isAuthenticated,
   });
-
-  // Fetch order stats
   const { data: stats } = useQuery({
     queryKey: ["orders", "stats"],
     queryFn: getOrderStats,
-    enabled: isAuthenticated,
   });
 
-  // Update status mutation
-  const updateStatusMutation = useMutation({
-    mutationFn: ({ orderId, status }: { orderId: string; status: string }) =>
-      updateOrderStatus(orderId, status),
-    onSuccess: () => {
-      toast.success("Order status updated successfully");
-      setShowStatusDialog(false);
-      setSelectedOrder(null);
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ["orders"] });
+    queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+  };
+
+  const statusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: string }) =>
+      updateOrderStatus(id, status),
+    onSuccess: (_d, v) => {
+      toast.success("Order status updated", {
+        description: `${v.id.slice(0, 8)} · now ${v.status} · recorded in the audit log`,
+      });
+      setEditing(null);
+      invalidate();
     },
-    onError: () => {
-      toast.error("Failed to update order status");
-    },
+    onError: (e) => toast.error((e as Error).message || "Status change failed"),
   });
 
-  // Delete order mutation
   const deleteMutation = useMutation({
-    mutationFn: (orderId: string) => deleteOrder(orderId),
+    mutationFn: (id: string) => deleteOrder(id),
     onSuccess: () => {
-      toast.success("Order permanently deleted");
-      setShowDeleteDialog(false);
-      setOrderToDelete(null);
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      toast.success("Order deleted", { description: "Recorded in the audit log" });
+      setDeleting(null);
+      invalidate();
     },
-    onError: () => {
-      toast.error("Failed to delete order");
-    },
+    onError: (e) => toast.error((e as Error).message || "Delete failed"),
   });
 
-  // Show loading skeleton while checking auth
-  if (loading) {
-    return <DashboardLayoutSkeleton />;
-  }
-
-  // Redirect to login if not authenticated
-  if (!isAuthenticated) {
-    const loginUrl = getLoginUrl();
-    if (loginUrl) {
-      window.location.href = loginUrl;
-      return <DashboardLayoutSkeleton />;
-    }
-    // No OAuth configured (local dev) — render page with empty data
-  }
+  const columns: DataTableColumn<Order>[] = [
+    { key: "orderId", header: "Order", mono: true, render: (o) => o.orderId.slice(0, 8) },
+    {
+      key: "customer",
+      header: "Customer",
+      render: (o) => (
+        <div>
+          <div className="ntb__primary">{o.customerName || "Guest"}</div>
+          {o.customerEmail ? (
+            <div className="ntb__sub numu-email">{o.customerEmail}</div>
+          ) : null}
+        </div>
+      ),
+    },
+    {
+      key: "status",
+      header: "Status",
+      render: (o) => <StatusBadge status={ORDER_STATUS[o.status] ?? "open"} />,
+    },
+    {
+      key: "paymentStatus",
+      header: "Payment",
+      render: (o) => (
+        <StatusBadge status={PAYMENT_STATUS[o.paymentStatus] ?? "pending"} />
+      ),
+    },
+    {
+      key: "total",
+      header: "Value",
+      align: "end",
+      mono: true,
+      render: (o) => formatMoney(o.total, o.currency ?? "EGP"),
+    },
+    {
+      key: "createdAt",
+      header: "Placed",
+      mono: true,
+      render: (o) => formatDateTime(o.createdAt),
+    },
+    {
+      key: "actions",
+      header: "",
+      width: 90,
+      render: (o) => (
+        <div className="ak-rowactions" onClick={(e) => e.stopPropagation()}>
+          <IconButton
+            icon="refresh"
+            label="Change this order's status"
+            size="sm"
+            onClick={() => {
+              setEditing(o);
+              setNextStatus(o.status);
+            }}
+          />
+          <IconButton
+            icon="trash"
+            label="Delete this order"
+            size="sm"
+            onClick={() => setDeleting(o)}
+          />
+        </div>
+      ),
+    },
+  ];
 
   const orders = data?.orders ?? [];
-  const total = data?.total ?? 0;
-  const totalPages = Math.ceil(total / limit);
-
-  const formatCurrency = (cents: number, currency: string = "USD") => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency,
-      minimumFractionDigits: 2,
-    }).format(cents / 100);
-  };
-
-  const handleStatusChange = () => {
-    if (selectedOrder && newStatus) {
-      updateStatusMutation.mutate({
-        orderId: selectedOrder.orderId,
-        status: newStatus as any,
-      });
-    }
-  };
+  const filtered = Boolean(search) || view !== "all";
 
   return (
     <DashboardLayout
       title="Orders"
-      subtitle="Manage all orders across the platform"
+      subtitle="Every order across every merchant."
+      meta={<span>{formatNumber(data?.total)} matching</span>}
     >
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6">
-        <div className="dashboard-card flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
-            <ShoppingCart className="w-5 h-5 text-gray-600" />
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Total</p>
-            <p className="text-xl font-bold">{stats?.total ?? 0}</p>
-          </div>
-        </div>
-        <div className="dashboard-card flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center">
-            <Clock className="w-5 h-5 text-amber-600" />
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Pending</p>
-            <p className="text-xl font-bold text-amber-600">{stats?.pending ?? 0}</p>
-          </div>
-        </div>
-        <div className="dashboard-card flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
-            <Package className="w-5 h-5 text-blue-600" />
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Processing</p>
-            <p className="text-xl font-bold text-blue-600">{stats?.processing ?? 0}</p>
-          </div>
-        </div>
-        <div className="dashboard-card flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center">
-            <Truck className="w-5 h-5 text-purple-600" />
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Shipped</p>
-            <p className="text-xl font-bold text-purple-600">{stats?.shipped ?? 0}</p>
-          </div>
-        </div>
-        <div className="dashboard-card flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center">
-            <CheckCircle className="w-5 h-5 text-emerald-600" />
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Delivered</p>
-            <p className="text-xl font-bold text-emerald-600">{stats?.delivered ?? 0}</p>
-          </div>
-        </div>
-        <div className="dashboard-card flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-red-50 flex items-center justify-center">
-            <XCircle className="w-5 h-5 text-red-600" />
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Cancelled</p>
-            <p className="text-xl font-bold text-red-600">{stats?.cancelled ?? 0}</p>
-          </div>
-        </div>
+      <div className="ak-metrics">
+        <MetricCard
+          label="Pending"
+          value={formatNumber(stats?.pending)}
+          icon="clock"
+          flat
+          onClick={() => setView("pending")}
+        />
+        <MetricCard
+          label="Processing"
+          value={formatNumber(stats?.processing)}
+          icon="package"
+          flat
+          onClick={() => setView("processing")}
+        />
+        <MetricCard
+          label="Shipped"
+          value={formatNumber(stats?.shipped)}
+          icon="truck"
+          flat
+          onClick={() => setView("shipped")}
+        />
+        <MetricCard
+          label="Delivered"
+          value={formatNumber(stats?.delivered)}
+          icon="check"
+          flat
+          onClick={() => setView("delivered")}
+        />
+        <MetricCard
+          label="Cancelled"
+          value={formatNumber(stats?.cancelled)}
+          icon="x"
+          flat
+          onClick={() => setView("cancelled")}
+        />
       </div>
 
-      {/* Filters */}
-      <div className="dashboard-card mb-6">
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="Search orders by ID, customer name, or email..."
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(0);
-              }}
-              className="pl-10"
+      <Card flush>
+        <FilterBar
+          savedViews={VIEWS}
+          activeView={view}
+          onViewChange={(id) => {
+            setView(id);
+            setPage(1);
+          }}
+          search={search}
+          onSearchChange={(v) => {
+            setSearch(v);
+            setPage(1);
+          }}
+          searchPlaceholder="Order number or customer"
+          actions={
+            <Button variant="subtle" size="sm" icon="refresh" onClick={invalidate}>
+              Refresh
+            </Button>
+          }
+        />
+        <DataTable
+          columns={columns}
+          rows={orders}
+          rowKey={(o) => o.orderId}
+          loading={isLoading}
+          caption="Orders across all merchants"
+          onRowClick={(o) => navigate(`/merchants/${o.merchantId}`)}
+          isFlagged={(o) => o.paymentStatus === "failed" || o.status === "cancelled"}
+          empty={
+            <EmptyState
+              kind={filtered ? "noResults" : "empty"}
+              title={filtered ? "Nothing matches" : "No orders yet"}
+              body={
+                filtered
+                  ? "Widen the search or switch to another saved view."
+                  : "Orders placed on any merchant storefront appear here within seconds."
+              }
+              action={
+                filtered ? (
+                  <Button
+                    size="sm"
+                    variant="subtle"
+                    onClick={() => {
+                      setSearch("");
+                      setView("all");
+                    }}
+                  >
+                    Clear filters
+                  </Button>
+                ) : undefined
+              }
             />
-          </div>
+          }
+        />
+        <Pagination
+          page={page}
+          pageSize={PAGE_SIZE}
+          total={data?.total ?? 0}
+          onPageChange={setPage}
+        />
+      </Card>
+
+      <Dialog
+        open={Boolean(editing)}
+        title="Change order status"
+        description={
+          editing
+            ? `${editing.orderId.slice(0, 8)} · ${formatMoney(editing.total, editing.currency ?? "EGP")} · currently ${editing.status}.`
+            : undefined
+        }
+        onClose={() => setEditing(null)}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setEditing(null)}>
+              Cancel
+            </Button>
+            <Button
+              loading={statusMutation.isPending}
+              onClick={() =>
+                editing &&
+                statusMutation.mutate({ id: editing.orderId, status: nextStatus })
+              }
+            >
+              Update status
+            </Button>
+          </>
+        }
+      >
+        <FormField
+          label="New status"
+          hint="The merchant sees the change immediately. This is recorded in the audit log against your account."
+        >
           <Select
-            value={statusFilter}
-            onValueChange={(value) => {
-              setStatusFilter(value);
-              setPage(0);
-            }}
-          >
-            <SelectTrigger className="w-40">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="pending">Pending</SelectItem>
-              <SelectItem value="processing">Processing</SelectItem>
-              <SelectItem value="shipped">Shipped</SelectItem>
-              <SelectItem value="delivered">Delivered</SelectItem>
-              <SelectItem value="cancelled">Cancelled</SelectItem>
-              <SelectItem value="refunded">Refunded</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      {/* Orders Table */}
-      <div className="dashboard-card">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Order ID</TableHead>
-              <TableHead>Customer</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Payment</TableHead>
-              <TableHead>Total</TableHead>
-              <TableHead>Items</TableHead>
-              <TableHead>Date</TableHead>
-              <TableHead className="w-10"></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              <TableRow>
-                <TableCell colSpan={8} className="text-center py-8">
-                  Loading orders...
-                </TableCell>
-              </TableRow>
-            ) : orders.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                  No orders found
-                </TableCell>
-              </TableRow>
-            ) : (
-              orders.map((order) => {
-                const StatusIcon = statusConfig[order.status]?.icon ?? Clock;
-                const items = (order.items as any[]) ?? [];
-                return (
-                  <TableRow key={order.id}>
-                    <TableCell className="font-mono text-sm">
-                      #{order.orderId.substring(0, 8)}
-                    </TableCell>
-                    <TableCell>
-                      <div>
-                        <p className="font-medium">{order.customerName || "Guest"}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {order.customerEmail || "-"}
-                        </p>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={`${statusConfig[order.status]?.color} flex items-center gap-1 w-fit`}>
-                        <StatusIcon className="w-3 h-3" />
-                        {order.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={paymentStatusColors[order.paymentStatus]}>
-                        {order.paymentStatus}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="font-medium">
-                      {formatCurrency(order.total, order.currency ?? "USD")}
-                    </TableCell>
-                    <TableCell>{items.length} items</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {new Date(order.createdAt).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          title="Update status"
-                          onClick={() => {
-                            setSelectedOrder(order);
-                            setNewStatus(order.status);
-                            setShowStatusDialog(true);
-                          }}
-                        >
-                          <MoreHorizontal className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          title="Delete order permanently"
-                          className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                          onClick={() => {
-                            setOrderToDelete(order);
-                            setShowDeleteDialog(true);
-                          }}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })
-            )}
-          </TableBody>
-        </Table>
-
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between mt-4 pt-4 border-t">
-            <p className="text-sm text-muted-foreground">
-              Showing {page * limit + 1} to {Math.min((page + 1) * limit, total)} of {total} orders
-            </p>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage((p) => Math.max(0, p - 1))}
-                disabled={page === 0}
-              >
-                <ChevronLeft className="w-4 h-4" />
-                Previous
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-                disabled={page >= totalPages - 1}
-              >
-                Next
-                <ChevronRight className="w-4 h-4" />
-              </Button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Status Update Dialog */}
-      <Dialog open={showStatusDialog} onOpenChange={setShowStatusDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Update Order Status</DialogTitle>
-            <DialogDescription>
-              Change the status for order #{selectedOrder?.orderId?.substring(0, 8)}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            <Select value={newStatus} onValueChange={setNewStatus}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="processing">Processing</SelectItem>
-                <SelectItem value="shipped">Shipped</SelectItem>
-                <SelectItem value="delivered">Delivered</SelectItem>
-                <SelectItem value="cancelled">Cancelled</SelectItem>
-                <SelectItem value="refunded">Refunded</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowStatusDialog(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleStatusChange}
-              disabled={updateStatusMutation.isPending}
-            >
-              {updateStatusMutation.isPending ? "Updating..." : "Update Status"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
+            value={nextStatus}
+            onChange={(e) => setNextStatus(e.target.value)}
+            options={NEXT_STATUS}
+          />
+        </FormField>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="text-red-600">Delete Order Permanently</DialogTitle>
-            <DialogDescription>
-              This will permanently delete order{" "}
-              <span className="font-mono font-semibold">
-                #{orderToDelete?.orderId?.substring(0, 8)}
-              </span>{" "}
-              and all its related records (activities, shipments, refunds, payment proofs).
-              This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-              <p className="font-medium">
-                {orderToDelete?.customerName || "Guest"} &mdash;{" "}
-                {formatCurrency(orderToDelete?.total ?? 0, orderToDelete?.currency ?? "USD")}
-              </p>
-              <p className="text-xs mt-1 text-red-600">
-                Status: {orderToDelete?.status} | Payment: {orderToDelete?.paymentStatus}
-              </p>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setShowDeleteDialog(false);
-                setOrderToDelete(null);
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => {
-                if (orderToDelete) {
-                  deleteMutation.mutate(orderToDelete.orderId);
-                }
-              }}
-              disabled={deleteMutation.isPending}
-            >
-              {deleteMutation.isPending ? "Deleting..." : "Delete Forever"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        open={Boolean(deleting)}
+        tone="danger"
+        title="Delete this order?"
+        entity={[
+          { label: "Order", value: deleting?.orderId ?? "", mono: true },
+          { label: "Customer", value: deleting?.customerName || "Guest" },
+          {
+            label: "Value",
+            value: deleting ? formatMoney(deleting.total, deleting.currency ?? "EGP") : "",
+            mono: true,
+          },
+        ]}
+        consequences={[
+          "The order disappears from the merchant's hub and from platform totals.",
+          "Any payment already captured is not refunded by this action.",
+          "This cannot be undone.",
+        ]}
+        confirmPhrase={deleting?.orderId.slice(0, 8)}
+        confirmLabel="Delete order"
+        onClose={() => setDeleting(null)}
+        onConfirm={() => deleting && deleteMutation.mutate(deleting.orderId)}
+      />
     </DashboardLayout>
   );
 }

@@ -1,0 +1,82 @@
+/* COMPONENT TOKENS
+   Per-component knobs. A component reads these; a product overrides these
+   (never the semantic layer) when one instance must differ. */
+:root {
+  /* Button */
+  --btn-h: var(--control-h);
+  --btn-h-sm: var(--control-h-sm);
+  --btn-h-lg: 46px;
+  --btn-px: 18px;
+  --btn-px-sm: 14px;
+  --btn-radius: var(--radius-control);
+  --btn-font: var(--font-ui);
+  --btn-weight: var(--fw-semibold);
+  --btn-fs: var(--fs-app-body);
+  --btn-gap: var(--sp-2);
+
+  /* Input */
+  --input-h: var(--control-h);
+  --input-px: 12px;
+  --input-bg: var(--white);
+  --input-radius: var(--radius-control);
+  --input-fs: var(--fs-app-body);
+
+  /* Badge */
+  --badge-font: var(--ff-mono);
+  --badge-fs: var(--fs-app-mono-sm);
+  --badge-px: 10px;
+  --badge-py: 4px;
+  --badge-radius: var(--r-pill);
+  --badge-ls: 0.1em;
+
+  /* Chip */
+  --chip-font: var(--font-ui);
+  --chip-fs: var(--fs-app-xs);
+  --chip-h: 28px;
+  --chip-px: 12px;
+
+  /* Card */
+  --card-bg: var(--surface-card);
+  --card-radius: var(--radius-card);
+  --card-pad: var(--sp-4);
+  --card-border: var(--border-subtle);
+  --card-shadow: var(--elev-card);
+
+  /* Table */
+  --table-row-h: var(--row-h);
+  --table-row-h-dense: var(--row-h-dense);
+  --table-head-bg: var(--surface-panel);
+  --table-head-fs: var(--fs-app-meta);
+  --table-cell-px: var(--sp-3);
+  --table-border: var(--border-subtle);
+  --table-row-hover: var(--surface-hover);
+  --table-row-selected: var(--surface-selected);
+  --table-zebra: transparent;
+
+  /* Nav */
+  --nav-item-h: 36px;
+  --nav-item-radius: var(--r-md);
+  --nav-section-fs: var(--fs-app-meta);
+
+  /* Dialog / drawer */
+  --dialog-w: 460px;
+  --dialog-radius: var(--r-xl);
+  --drawer-w: 520px;
+
+  /* Timeline */
+  --timeline-rail: var(--border-subtle);
+  --timeline-dot: 9px;
+  --timeline-gutter: 26px;
+
+  /* Chart */
+  --chart-bar-radius: 2px;
+  --chart-stroke-w: 2px;
+  --chart-grid: var(--viz-grid);
+  --chart-label-fs: var(--fs-app-meta);
+
+  /* Souk motif */
+  --souk-tile-w: 88px;
+  --souk-tile-h: 44px;
+  --souk-stroke: var(--sienna);
+  --souk-opacity: 0.75; /* @kind other */
+}

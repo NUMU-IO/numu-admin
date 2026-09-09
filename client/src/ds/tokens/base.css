@@ -1,0 +1,125 @@
+/* BASE — the only global rules in the system. Everything else is a token or a
+   component. Consumers can link styles.css and get correct focus, numerals
+   and bidi behaviour with no extra work. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-app-body);
+  line-height: var(--lh-body-m);
+  color: var(--text-body);
+  background: var(--surface-app);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-heading);
+  color: var(--text-heading);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--ls-title);
+  margin: 0;
+  text-wrap: pretty;
+}
+
+p { margin: 0; text-wrap: pretty; }
+
+a {
+  color: var(--text-link);
+  text-decoration-color: color-mix(in oklab, currentColor 35%, transparent);
+  text-underline-offset: 2px;
+}
+a:hover { color: var(--text-link-hover); text-decoration-color: currentColor; }
+
+/* Visible keyboard focus, everywhere, never removed. Mouse clicks do not
+   paint it; keyboard and programmatic focus do. */
+:focus-visible {
+  outline: var(--bw-focus) solid var(--border-focus);
+  outline-offset: 2px;
+  border-radius: var(--r-xs);
+}
+.numu-focus-ring:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* Every number in a table, metric, invoice or timestamp is tabular. */
+.numu-num,
+table td,
+table th {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+/* Mono metadata: IDs, timestamps, webhook events, audit rows. */
+.numu-mono {
+  font-family: var(--ff-mono);
+  font-size: var(--fs-app-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--ls-mono);
+}
+
+/* The system's one recurring micro-label. Uppercase, tracked, mono. */
+.numu-label {
+  font-family: var(--ff-mono);
+  font-size: var(--fs-app-meta);
+  letter-spacing: var(--ls-label);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* BIDI ISOLATION
+   Mixed content is the norm, not the edge case: an Arabic sentence containing
+   an order ID, a Latin domain, a phone number or a price. Wrap the foreign run
+   so the bidi algorithm cannot reorder the surrounding sentence. */
+.numu-ltr { direction: ltr; unicode-bidi: isolate; display: inline-block; }
+.numu-rtl { direction: rtl; unicode-bidi: isolate; display: inline-block; }
+.numu-id,
+.numu-phone,
+.numu-domain,
+.numu-email {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--ff-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Directional icons (chevrons, arrows, back, next) mirror; status and brand
+   icons never do. Opt in per icon. */
+[dir="rtl"] .numu-icon-flip { transform: scaleX(-1); }
+
+.numu-sr {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Skip link — first focusable element of every admin shell. */
+.numu-skip {
+  position: absolute; left: -9999px;
+  z-index: var(--z-toast);
+  padding: var(--sp-2) var(--sp-4);
+  background: var(--surface-nav);
+  color: var(--text-on-nav-active);
+  border-radius: var(--r-md);
+}
+.numu-skip:focus { left: var(--sp-4); top: var(--sp-4); }
+
+/* Souk tile motif — border, divider and framing device only. Never a
+   full-page background. */
+.numu-souk {
+  height: var(--souk-tile-h);
+  opacity: var(--souk-opacity);
+  background-image: url("../assets/souk-tile.svg");
+  background-size: var(--souk-tile-w) var(--souk-tile-h);
+  background-repeat: repeat-x;
+}

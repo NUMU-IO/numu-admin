@@ -1,50 +1,37 @@
 /**
- * WhatsappAccessRequests — admin queue for WhatsApp-notification access.
+ * WhatsApp — the access queue and the sending identity behind it.
  *
- * Merchants request permission to turn on WhatsApp notifications; this
- * page is where a super-admin works the queue. For each request the
- * admin can, depending on its current status:
+ * Merchants ask for permission to send WhatsApp notifications; an operator
+ * works this queue. Per request, depending on where it sits in the FSM:
  *
- *   - pending  → **Approve** or **Reject** (reject captures a reason).
- *   - approved → **Disable** (with optional notes).
- *   - rejected → **Approve** (re-consider and grant).
- *   - disabled → **Enable** (switch access back on).
+ *   pending  → approve, or reject with a reason
+ *   approved → disable
+ *   rejected → approve after all
+ *   disabled → enable again
  *
- * A status filter (defaulting to the pending queue) narrows the list;
- * the tab labels carry the global per-status counts. The list refetches
- * every 30s so the queue stays warm without manual reloads.
- *
- * Cloned from MarketplaceReview.tsx — same card / dialog / react-query
- * shape, same per-row `actingId` in-flight tracking.
+ * Rejecting and disabling both take an operator note. Rejection requires
+ * one — "Invalid input" is not a reason a merchant can act on, and the note
+ * is what they eventually see. The queue refetches every 30 seconds so a
+ * request that arrives while the page is open does not sit unseen.
  */
 
-import { useState } from "react";
+import DashboardLayout from "@/components/DashboardLayout";
 import { PlatformDeviceCard } from "@/components/whatsapp/PlatformDeviceCard";
 import { TransportAssignment } from "@/components/whatsapp/TransportAssignment";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useAuth } from "@/_core/hooks/useAuth";
-import DashboardLayout from "@/components/DashboardLayout";
-import { DashboardLayoutSkeleton } from "@/components/DashboardLayoutSkeleton";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
+  Button,
   Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
-import {
   Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { getLoginUrl } from "@/const";
+  EmptyState,
+  FormField,
+  KeyValue,
+  Skeleton,
+  StatusBadge,
+  Tabs,
+  Textarea,
+  type KeyValueItem,
+} from "@/ds";
+import { formatDateTime, formatRelative } from "@/lib/format";
 import {
   listWhatsappAccessRequests,
   whatsappAccessActions,
@@ -53,26 +40,9 @@ import {
   type WhatsappAccessStatus,
   type WhatsappAccessStatusFilter,
 } from "@/services/whatsappAccessApi";
-import {
-  Ban,
-  Building2,
-  Check,
-  Clock,
-  Gauge,
-  Inbox,
-  Loader2,
-  Mail,
-  MessageCircle,
-  Phone,
-  Power,
-  RefreshCw,
-  ShieldAlert,
-  User,
-  X,
-} from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { toast } from "sonner";
-
-// ─── Static config ───────────────────────────────────────────────────────────
 
 const STATUS_FILTERS: { value: WhatsappAccessStatusFilter; label: string }[] = [
   { value: "pending", label: "Pending" },
@@ -82,296 +52,193 @@ const STATUS_FILTERS: { value: WhatsappAccessStatusFilter; label: string }[] = [
   { value: "all", label: "All" },
 ];
 
-const STATUS_BADGE: Record<
-  WhatsappAccessStatus,
-  { label: string; className: string }
-> = {
-  pending: {
-    label: "Pending",
-    className:
-      "border-transparent bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300",
-  },
-  approved: {
-    label: "Approved",
-    className:
-      "border-transparent bg-green-100 text-green-800 dark:bg-green-500/15 dark:text-green-300",
-  },
-  rejected: {
-    label: "Rejected",
-    className:
-      "border-transparent bg-red-100 text-red-800 dark:bg-red-500/15 dark:text-red-300",
-  },
-  disabled: {
-    label: "Disabled",
-    className: "border-transparent bg-muted text-muted-foreground",
-  },
+/** The platform's status vocabulary, so the same word never renders twice. */
+const STATUS: Record<WhatsappAccessStatus, "pending" | "active" | "failed" | "archived"> = {
+  pending: "pending",
+  approved: "active",
+  rejected: "failed",
+  disabled: "archived",
 };
 
-// ─── Per-request card ────────────────────────────────────────────────────────
+const ACTION_VERB: Record<WhatsappAccessAction, string> = {
+  approve: "approved",
+  reject: "rejected",
+  disable: "disabled",
+  enable: "enabled",
+};
 
-interface AccessRequestCardProps {
+interface CardProps {
   item: AdminWhatsAppAccessItem;
   onAct: (action: WhatsappAccessAction, notes?: string) => void;
   pending: boolean;
 }
 
-function AccessRequestCard({ item, onAct, pending }: AccessRequestCardProps) {
+function AccessRequestCard({ item, onAct, pending }: CardProps) {
   const [dialog, setDialog] = useState<null | "reject" | "disable">(null);
   const [notes, setNotes] = useState("");
 
-  const createdAt = new Date(item.created_at);
-  const reviewedAt = item.reviewed_at ? new Date(item.reviewed_at) : null;
-  const badge = STATUS_BADGE[item.status];
-
-  const storeLabel = item.store_name ?? "Unnamed store";
-  const storeHandle = item.store_subdomain ?? item.store_slug ?? null;
-
-  // Reject needs a reason (mirrors the marketplace reject flow); the
-  // disable dialog's notes are optional.
+  const handle = item.store_subdomain ?? item.store_slug ?? null;
   const noteRequired = dialog === "reject";
   const canSubmit = !noteRequired || notes.trim().length > 0;
 
-  function openDialog(action: "reject" | "disable") {
-    setDialog(action);
-    setNotes("");
-  }
-
-  function commit() {
-    if (!dialog) return;
-    onAct(dialog, notes.trim() || undefined);
-    setDialog(null);
-  }
+  const facts: KeyValueItem[] = [
+    { label: "Requested", value: formatDateTime(item.created_at), mono: true },
+    { label: "Expected volume", value: item.expected_volume ?? "—" },
+    { label: "Contact", value: item.contact_phone ?? "—", mono: true },
+    { label: "Requester", value: item.requester_email ?? "—", mono: true },
+  ];
 
   return (
-    <Card className="overflow-hidden">
-      <CardHeader>
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex-1 min-w-0">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <span className="truncate">{storeLabel}</span>
-              {storeHandle && (
-                <Badge variant="outline" className="shrink-0 font-normal">
-                  {storeHandle}
-                </Badge>
-              )}
-            </CardTitle>
-            <CardDescription className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-              {item.requester_email && (
-                <span className="inline-flex items-center gap-1">
-                  <Mail className="h-3.5 w-3.5" />
-                  <a
-                    href={`mailto:${item.requester_email}`}
-                    className="underline-offset-2 hover:underline"
-                  >
-                    {item.requester_email}
-                  </a>
-                </span>
-              )}
-              <span className="inline-flex items-center gap-1 text-muted-foreground">
-                <Clock className="h-3.5 w-3.5" />
-                {createdAt.toLocaleString()}
-              </span>
-            </CardDescription>
-          </div>
-          <Badge className={`shrink-0 ${badge.className}`}>{badge.label}</Badge>
-        </div>
-      </CardHeader>
-
-      <CardContent className="space-y-4">
-        {item.note && (
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
-              Merchant note
-            </p>
-            <p className="text-sm leading-relaxed whitespace-pre-line">
-              {item.note}
-            </p>
-          </div>
-        )}
-
-        <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-          <div className="flex items-center gap-1.5 min-w-0">
-            <Gauge className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-            <span className="text-muted-foreground">Volume:</span>
-            <span className="truncate">{item.expected_volume ?? "—"}</span>
-          </div>
-          <div className="flex items-center gap-1.5 min-w-0">
-            <Phone className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-            <span className="text-muted-foreground">Contact:</span>
-            {item.contact_phone ? (
-              <a
-                href={`tel:${item.contact_phone}`}
-                className="truncate underline-offset-2 hover:underline"
-              >
-                {item.contact_phone}
-              </a>
-            ) : (
-              <span>—</span>
-            )}
-          </div>
-        </div>
-
-        {reviewedAt && (
-          <div className="rounded-md border border-border/60 bg-muted/30 p-3 text-xs space-y-1">
-            <p className="flex items-center gap-1.5 text-muted-foreground">
-              <User className="h-3.5 w-3.5 shrink-0" />
-              <span>
-                Reviewed {reviewedAt.toLocaleString()}
-                {item.reviewer_user_id && (
-                  <span className="text-muted-foreground/80">
-                    {" · by "}
-                    {item.reviewer_user_id}
-                  </span>
-                )}
-              </span>
-            </p>
-            {item.review_reason && (
-              <p className="whitespace-pre-line">{item.review_reason}</p>
-            )}
-          </div>
-        )}
-
-        <div className="flex flex-wrap gap-2 pt-1">
-          {item.status === "pending" && (
+    <Card
+      title={item.store_name ?? "Unnamed store"}
+      subtitle={handle ?? undefined}
+      actions={<StatusBadge status={STATUS[item.status]} />}
+      footer={
+        <div className="ak-cell-line">
+          {item.status === "pending" ? (
             <>
               <Button
                 size="sm"
+                icon="check"
+                loading={pending}
                 onClick={() => onAct("approve")}
-                disabled={pending}
-                className="bg-green-600 hover:bg-green-700"
               >
-                {pending ? (
-                  <Loader2 className="h-3.5 w-3.5 me-1.5 animate-spin" />
-                ) : (
-                  <Check className="h-3.5 w-3.5 me-1.5" />
-                )}
                 Approve
               </Button>
               <Button
                 size="sm"
-                variant="destructive"
-                onClick={() => openDialog("reject")}
+                variant="danger-outline"
+                icon="x"
                 disabled={pending}
+                onClick={() => {
+                  setDialog("reject");
+                  setNotes("");
+                }}
               >
-                <X className="h-3.5 w-3.5 me-1.5" />
                 Reject
               </Button>
             </>
-          )}
+          ) : null}
 
-          {item.status === "approved" && (
+          {item.status === "approved" ? (
             <Button
               size="sm"
-              variant="destructive"
-              onClick={() => openDialog("disable")}
-              disabled={pending}
+              variant="danger-outline"
+              icon="slash"
+              loading={pending}
+              onClick={() => {
+                setDialog("disable");
+                setNotes("");
+              }}
             >
-              {pending ? (
-                <Loader2 className="h-3.5 w-3.5 me-1.5 animate-spin" />
-              ) : (
-                <Ban className="h-3.5 w-3.5 me-1.5" />
-              )}
               Disable
             </Button>
-          )}
+          ) : null}
 
-          {item.status === "rejected" && (
-            <Button
-              size="sm"
-              onClick={() => onAct("approve")}
-              disabled={pending}
-              className="bg-green-600 hover:bg-green-700"
-            >
-              {pending ? (
-                <Loader2 className="h-3.5 w-3.5 me-1.5 animate-spin" />
-              ) : (
-                <Check className="h-3.5 w-3.5 me-1.5" />
-              )}
-              Approve
+          {item.status === "rejected" ? (
+            <Button size="sm" icon="check" loading={pending} onClick={() => onAct("approve")}>
+              Approve after all
             </Button>
-          )}
+          ) : null}
 
-          {item.status === "disabled" && (
+          {item.status === "disabled" ? (
             <Button
               size="sm"
+              icon="playCircle"
+              loading={pending}
               onClick={() => onAct("enable")}
-              disabled={pending}
-              className="bg-green-600 hover:bg-green-700"
             >
-              {pending ? (
-                <Loader2 className="h-3.5 w-3.5 me-1.5 animate-spin" />
-              ) : (
-                <Power className="h-3.5 w-3.5 me-1.5" />
-              )}
               Enable
             </Button>
-          )}
+          ) : null}
         </div>
-
-        {/* Transport assignment. Only meaningful once access is granted —
-            choosing Meta vs GOWA, and for GOWA whether the store rides the
-            shared platform number or pairs its own. */}
-        {item.status === "approved" && (
-          <TransportAssignment
-            storeId={item.store_id}
-            storeName={item.store_name}
-          />
-        )}
-      </CardContent>
-
-      <Dialog open={dialog !== null} onOpenChange={(o) => !o && setDialog(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {dialog === "reject"
-                ? "Reject this request"
-                : "Disable WhatsApp access"}
-            </DialogTitle>
-            <DialogDescription>
-              {dialog === "reject"
-                ? "The store won't be granted WhatsApp access. Add a reason — it's kept on the request for the audit trail."
-                : "WhatsApp access will be switched off for this store. You can re-enable it later from this queue."}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2">
-            <label className="text-sm font-medium" htmlFor="wa-access-notes">
-              {dialog === "reject" ? "Reason" : "Notes (optional)"}
-            </label>
-            <Textarea
-              id="wa-access-notes"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={4}
-              placeholder={
-                dialog === "reject"
-                  ? "Why is this request being rejected?"
-                  : "Optional context for disabling access."
-              }
-            />
+      }
+    >
+      {/* The card body has no gap of its own, so the stack owns the rhythm. */}
+      <div className="ak-stack">
+        {item.note ? (
+          <div className="ak-note">
+            <p className="numu-label">Merchant note</p>
+            <p>{item.note}</p>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialog(null)}>
+        ) : null}
+
+        <KeyValue items={facts} />
+
+        {item.reviewed_at ? (
+          <div className="ak-note">
+            <p className="numu-label">
+              Reviewed {formatRelative(item.reviewed_at)}
+              {item.reviewer_user_id ? ` · ${item.reviewer_user_id}` : ""}
+            </p>
+            {item.review_reason ? <p>{item.review_reason}</p> : null}
+          </div>
+        ) : null}
+
+        {/* Only meaningful once access is granted: Meta Cloud versus GOWA, and
+            for GOWA whether the store rides the shared number or pairs its own. */}
+        {item.status === "approved" ? (
+          <TransportAssignment storeId={item.store_id} storeName={item.store_name} />
+        ) : null}
+      </div>
+
+      <Dialog
+        open={dialog !== null}
+        tone={dialog === "reject" ? "danger" : "warning"}
+        title={dialog === "reject" ? "Reject this request?" : "Disable WhatsApp access?"}
+        description={
+          dialog === "reject"
+            ? "The store is not granted access. The reason is kept on the request and shown in the audit trail."
+            : "The store stops sending immediately. You can re-enable it from this queue at any time."
+        }
+        onClose={() => setDialog(null)}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setDialog(null)}>
               Cancel
             </Button>
             <Button
-              variant="destructive"
-              onClick={commit}
+              variant="danger"
               disabled={!canSubmit}
+              onClick={() => {
+                if (!dialog) return;
+                onAct(dialog, notes.trim() || undefined);
+                setDialog(null);
+              }}
             >
-              {dialog === "reject" ? "Reject" : "Disable"}
+              {dialog === "reject" ? "Reject request" : "Disable access"}
             </Button>
-          </DialogFooter>
-        </DialogContent>
+          </>
+        }
+      >
+        <FormField
+          label={dialog === "reject" ? "Reason" : "Notes"}
+          required={noteRequired}
+          htmlFor="wa-access-notes"
+          hint={
+            dialog === "reject"
+              ? "Say what would make this request approvable."
+              : "Optional context for the audit trail."
+          }
+        >
+          <Textarea
+            id="wa-access-notes"
+            rows={4}
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder={
+              dialog === "reject"
+                ? "e.g. Business number is not verified with Meta yet."
+                : "e.g. Merchant asked to pause while they migrate numbers."
+            }
+          />
+        </FormField>
       </Dialog>
     </Card>
   );
 }
 
-// ─── Page ────────────────────────────────────────────────────────────────────
-
 export default function WhatsappAccessRequests() {
-  const { user, loading: authLoading } = useAuth();
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] =
     useState<WhatsappAccessStatusFilter>("pending");
@@ -380,9 +247,7 @@ export default function WhatsappAccessRequests() {
   const requestsQuery = useQuery({
     queryKey: ["whatsapp-access-requests", statusFilter],
     queryFn: () => listWhatsappAccessRequests(statusFilter),
-    // 30s refetch so the queue stays warm without manual reloads —
-    // requests trickle in as merchants opt into WhatsApp.
-    refetchInterval: 30 * 1000,
+    refetchInterval: 30_000,
   });
 
   const actionMutation = useMutation({
@@ -398,151 +263,109 @@ export default function WhatsappAccessRequests() {
     onMutate: ({ id }) => setActingId(id),
     onSettled: () => setActingId(null),
     onSuccess: (updated, { action }) => {
-      const verb =
-        action === "approve"
-          ? "approved"
-          : action === "reject"
-            ? "rejected"
-            : action === "disable"
-              ? "disabled"
-              : "enabled";
-      toast.success(`${updated.store_name ?? "Request"} ${verb}`);
-      void queryClient.invalidateQueries({
-        queryKey: ["whatsapp-access-requests"],
+      toast.success(`${updated.store_name ?? "Request"} ${ACTION_VERB[action]}`, {
+        description: "Recorded in the audit log against your account",
       });
+      void queryClient.invalidateQueries({ queryKey: ["whatsapp-access-requests"] });
+      void queryClient.invalidateQueries({ queryKey: ["dashboard", "queues"] });
     },
     onError: (err: unknown) => {
       // A 409 (illegal transition) or any 4xx arrives as an Error whose
       // message is the backend `detail` string — surface it verbatim.
-      const msg = err instanceof Error ? err.message : String(err);
-      toast.error(`Action failed: ${msg}`);
+      toast.error(err instanceof Error ? err.message : String(err));
     },
   });
-
-  if (authLoading) return <DashboardLayoutSkeleton />;
-  if (!user) {
-    const target = getLoginUrl();
-    if (target) window.location.href = target;
-    return null;
-  }
 
   const requests = requestsQuery.data?.requests ?? [];
   const counts = requestsQuery.data?.counts;
 
-  const countFor = (value: WhatsappAccessStatusFilter): number | null => {
-    if (!counts) return null;
+  const countFor = (value: WhatsappAccessStatusFilter): number | undefined => {
+    if (!counts) return undefined;
     if (value === "all") {
-      return (
-        counts.pending + counts.approved + counts.rejected + counts.disabled
-      );
+      return counts.pending + counts.approved + counts.rejected + counts.disabled;
     }
     return counts[value];
   };
 
   return (
-    <DashboardLayout title="WhatsApp">
-      <div className="space-y-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
-              <MessageCircle className="h-6 w-6 text-primary" />
-              WhatsApp
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1 max-w-xl">
-              Approve or reject merchant requests to switch on WhatsApp
-              notifications, and choose how each approved store sends — Meta
-              Cloud, the shared NUMU number, or their own number over GOWA.
-            </p>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void requestsQuery.refetch()}
-            disabled={requestsQuery.isFetching}
-          >
-            <RefreshCw
-              className={`h-3.5 w-3.5 me-1.5${
-                requestsQuery.isFetching ? " animate-spin" : ""
-              }`}
-            />
-            Refresh
-          </Button>
-        </div>
-
-        {/* Sending identity for every merchant on the shared number. Above the
-            queue because if this session dies, they all stop sending. */}
-        <PlatformDeviceCard />
-
-        <Tabs
-          value={statusFilter}
-          onValueChange={(v) => setStatusFilter(v as WhatsappAccessStatusFilter)}
+    <DashboardLayout
+      title="WhatsApp"
+      subtitle="Access requests, and how each approved store sends."
+      actions={
+        <Button
+          variant="subtle"
+          icon="refresh"
+          loading={requestsQuery.isFetching}
+          onClick={() => void requestsQuery.refetch()}
         >
-          <TabsList>
-            {STATUS_FILTERS.map((f) => {
-              const c = countFor(f.value);
-              return (
-                <TabsTrigger key={f.value} value={f.value}>
-                  {f.label}
-                  {c !== null && (
-                    <span className="ms-1 rounded-full bg-muted-foreground/15 px-1.5 py-0.5 text-[10px] font-medium tabular-nums">
-                      {c}
-                    </span>
-                  )}
-                </TabsTrigger>
-              );
-            })}
-          </TabsList>
-        </Tabs>
+          Refresh
+        </Button>
+      }
+      tabs={
+        <Tabs
+          tabs={STATUS_FILTERS.map((f) => ({
+            id: f.value,
+            label: f.label,
+            count: countFor(f.value),
+          }))}
+          active={statusFilter}
+          onChange={(id) => setStatusFilter(id as WhatsappAccessStatusFilter)}
+        />
+      }
+    >
+      {/* The sending identity every merchant on the shared number depends on.
+          Above the queue because if this session drops, they all stop sending. */}
+      <PlatformDeviceCard />
 
-        {requestsQuery.isError && (
-          <Card className="border-destructive/40 bg-destructive/5">
-            <CardContent className="pt-6 flex items-start gap-3">
-              <ShieldAlert className="h-5 w-5 text-destructive shrink-0" />
-              <div className="text-sm">
-                <p className="font-medium">Could not load access requests</p>
-                <p className="text-muted-foreground mt-0.5">
-                  {requestsQuery.error instanceof Error
-                    ? requestsQuery.error.message
-                    : "Unknown error"}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+      {requestsQuery.isError ? (
+        <Card>
+          <EmptyState
+            kind="error"
+            title="Access requests failed to load"
+            body={
+              requestsQuery.error instanceof Error
+                ? requestsQuery.error.message
+                : "The request did not complete."
+            }
+            action={
+              <Button size="sm" onClick={() => void requestsQuery.refetch()}>
+                Try again
+              </Button>
+            }
+          />
+        </Card>
+      ) : null}
 
-        {requestsQuery.isLoading && (
-          <div className="grid gap-4 lg:grid-cols-2">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <Card key={i} className="h-56 animate-pulse bg-muted/30" />
-            ))}
-          </div>
-        )}
-
-        {!requestsQuery.isLoading && requests.length === 0 && (
-          <Card>
-            <CardContent className="py-16 text-center">
-              <Inbox className="h-12 w-12 mx-auto text-muted-foreground/30 mb-3" />
-              <p className="font-medium">Nothing here</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                No {statusFilter === "all" ? "" : `${statusFilter} `}access
-                requests right now.
-              </p>
-            </CardContent>
-          </Card>
-        )}
-
-        <div className="grid gap-4 lg:grid-cols-2">
-          {requests.map((item) => (
-            <AccessRequestCard
-              key={item.id}
-              item={item}
-              pending={actionMutation.isPending && actingId === item.id}
-              onAct={(action, notes) =>
-                actionMutation.mutate({ id: item.id, action, notes })
-              }
-            />
+      {requestsQuery.isLoading ? (
+        <div className="ak-2col">
+          {[0, 1, 2, 3].map((i) => (
+            <Skeleton key={i} height={220} variant="block" />
           ))}
         </div>
+      ) : null}
+
+      {!requestsQuery.isLoading && !requestsQuery.isError && requests.length === 0 ? (
+        <Card>
+          <EmptyState
+            kind={statusFilter === "pending" ? "empty" : "noResults"}
+            icon="inbox"
+            title={statusFilter === "pending" ? "Queue is clear" : "Nothing here"}
+            body={`No ${statusFilter === "all" ? "" : `${statusFilter} `}access requests right now.`}
+          />
+        </Card>
+      ) : null}
+
+      <div className="ak-2col">
+        {requests.map((item) => (
+          <AccessRequestCard
+            key={item.id}
+            item={item}
+            pending={actionMutation.isPending && actingId === item.id}
+            onAct={(action, notes) =>
+              actionMutation.mutate({ id: item.id, action, notes })
+            }
+          />
+        ))}
       </div>
     </DashboardLayout>
   );

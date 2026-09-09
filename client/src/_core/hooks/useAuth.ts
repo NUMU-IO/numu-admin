@@ -1,6 +1,8 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getMe, logout as logoutApi, type AdminUser } from "@/services/authService";
 import { getLoginUrl } from "@/const";
+import { purgeCaches } from "@/lib/serviceWorker";
+import { revokePushSubscription } from "@/services/pushApi";
 import { useCallback, useEffect, useMemo } from "react";
 
 type UseAuthOptions = {
@@ -38,8 +40,16 @@ export function useAuth(options?: UseAuthOptions) {
 
   const logout = useCallback(async () => {
     try {
+      // Revoke push BEFORE the session goes: a signed-out laptop must stop
+      // buzzing with the platform's queues, and afterwards the call would
+      // 401. Best-effort — a failure here must not trap someone signed in.
+      await revokePushSubscription().catch(() => undefined);
       await logoutApi();
     } finally {
+      // SECURITY: drop the service worker's runtime caches. Nothing cached is
+      // an API response, but a shared ops machine should keep no application
+      // state at all past sign-out.
+      await purgeCaches();
       queryClient.setQueryData(["auth", "me"], null);
       queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
     }

@@ -22,6 +22,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
+import { Button as NumuButton } from "@/ds";
 import { DashboardLayoutSkeleton } from "@/components/DashboardLayoutSkeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -318,33 +319,21 @@ export default function MarketplaceReview() {
   const pending = pendingQuery.data?.pending ?? [];
 
   return (
-    <DashboardLayout title="Marketplace review">
-      <div className="space-y-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">
-              Marketplace review
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1 max-w-xl">
-              Approve or reject theme versions before they reach the public
-              catalog. Approval requires a fresh (≤5 min) MFA confirmation.
-            </p>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void pendingQuery.refetch()}
-            disabled={pendingQuery.isFetching}
-          >
-            <RefreshCw
-              className={`h-3.5 w-3.5 me-1.5${
-                pendingQuery.isFetching ? " animate-spin" : ""
-              }`}
-            />
-            Refresh
-          </Button>
-        </div>
-
+    <DashboardLayout
+      title="Marketplace review"
+      subtitle="Theme versions waiting to reach the public catalogue. Approval needs an MFA confirmation less than 5 minutes old."
+      actions={
+        <NumuButton
+          variant="subtle"
+          icon="refresh"
+          loading={pendingQuery.isFetching}
+          onClick={() => void pendingQuery.refetch()}
+        >
+          Refresh
+        </NumuButton>
+      }
+    >
+      <div className="ak-stack">
         {pendingQuery.isError && (
           <Card className="border-destructive/40 bg-destructive/5">
             <CardContent className="pt-6 flex items-start gap-3">

@@ -17,6 +17,11 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
+import {
+  Button as NumuButton,
+  Card as NumuCard,
+  EmptyState,
+} from "@/ds";
 import { DashboardLayoutSkeleton } from "@/components/DashboardLayoutSkeleton";
 import {
   Card,
@@ -58,18 +63,20 @@ export default function StoreSnapshotsPage() {
 
   if (!storeId) {
     return (
-      <DashboardLayout title="Snapshots">
-        <div className="p-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Snapshot browser</CardTitle>
-              <CardDescription>
-                Pick a store from the merchants list, or paste a store UUID into
-                the URL: <code>/marketplace/snapshots/&lt;store-uuid&gt;</code>.
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        </div>
+      <DashboardLayout title="Snapshots" subtitle="Theme change history, per store.">
+        <NumuCard>
+          <EmptyState
+            kind="empty"
+            icon="history"
+            title="Pick a store first"
+            body="Open a merchant from the list, or put a store UUID in the URL: /marketplace/snapshots/<store-uuid>."
+            action={
+              <Link href="/merchants">
+                <NumuButton size="sm">Go to merchants</NumuButton>
+              </Link>
+            }
+          />
+        </NumuCard>
       </DashboardLayout>
     );
   }
@@ -82,21 +89,19 @@ export default function StoreSnapshotsPage() {
     const msg =
       query.error instanceof Error ? query.error.message : "Unknown error";
     return (
-      <DashboardLayout title="Snapshots">
-        <div className="p-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Couldn't load snapshots</CardTitle>
-              <CardDescription>{msg}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button variant="outline" onClick={() => query.refetch()}>
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Retry
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
+      <DashboardLayout title="Snapshots" subtitle="Theme change history, per store.">
+        <NumuCard>
+          <EmptyState
+            kind="error"
+            title="Snapshots failed to load"
+            body={msg}
+            action={
+              <NumuButton size="sm" icon="refresh" onClick={() => query.refetch()}>
+                Try again
+              </NumuButton>
+            }
+          />
+        </NumuCard>
       </DashboardLayout>
     );
   }
@@ -104,40 +109,27 @@ export default function StoreSnapshotsPage() {
   const snapshots = query.data?.snapshots ?? [];
 
   return (
-    <DashboardLayout title="Snapshots">
-      <div className="p-6 max-w-5xl space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <Link href="/merchants">
-              <Button variant="ghost" size="sm" className="-ml-2 mb-2">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Merchants
-              </Button>
-            </Link>
-            <h1 className="text-2xl font-semibold">Theme snapshots</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Read-only audit trail. A snapshot is captured every time the
-              store's theme is swapped, so support can see exactly what state
-              the merchant was in before the change.
-            </p>
-            <p className="text-xs font-mono text-muted-foreground mt-2">
-              store_id: {storeId}
-            </p>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => query.refetch()}
-            disabled={query.isFetching}
-          >
-            <RefreshCw
-              className={
-                "h-4 w-4 mr-2" + (query.isFetching ? " animate-spin" : "")
-              }
-            />
-            Refresh
-          </Button>
-        </div>
+    <DashboardLayout
+      title="Theme snapshots"
+      breadcrumbs={[
+        { label: "Admin", href: "/" },
+        { label: "Merchants", href: "/merchants" },
+        { label: "Snapshots" },
+      ]}
+      subtitle="Read-only. One snapshot per theme swap, so support can see the state the merchant was in before the change."
+      meta={<span className="numu-id">{storeId}</span>}
+      actions={
+        <NumuButton
+          variant="subtle"
+          icon="refresh"
+          loading={query.isFetching}
+          onClick={() => query.refetch()}
+        >
+          Refresh
+        </NumuButton>
+      }
+    >
+      <div className="ak-stack" style={{ maxWidth: 1040 }}>
 
         {snapshots.length === 0 ? (
           <Card>

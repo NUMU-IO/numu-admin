@@ -1,3 +1,9 @@
+/* Retargeted onto the NUMU design system.
+
+   Radii, control heights and hover behaviour come from the design system
+   rather than shadcn's defaults: the admin register sits at a 10px radius,
+   controls are 40px (32px small), and hover darkens the fill by one ramp
+   step — the system forbids hovers that work by lowering opacity. */
 import * as React from "react";
 
 import { cn } from "@/lib/utils";
@@ -7,7 +13,7 @@ function Card({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="card"
       className={cn(
-        "bg-card text-card-foreground flex flex-col gap-6 rounded-xl border py-6 shadow-sm",
+        "bg-card text-card-foreground flex flex-col gap-5 rounded-[var(--radius-card)] border py-5 shadow-[var(--elev-card)]",
         className
       )}
       {...props}
@@ -32,7 +38,7 @@ function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card-title"
-      className={cn("leading-none font-semibold", className)}
+      className={cn("font-display leading-none font-semibold tracking-[-0.01em]", className)}
       {...props}
     />
   );
