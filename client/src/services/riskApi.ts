@@ -47,10 +47,13 @@ export interface RiskListResponse {
   counts: Record<string, number>;
 }
 
+export type RiskSort = "newest" | "oldest";
+
 export function listRisk(params: {
   level?: RiskLevelFilter;
   state?: RiskStateFilter;
   search?: string;
+  sort?: RiskSort;
   limit?: number;
   offset?: number;
 }): Promise<RiskListResponse> {
@@ -58,6 +61,7 @@ export function listRisk(params: {
   if (params.level && params.level !== "all") q.set("level", params.level);
   if (params.state) q.set("state", params.state);
   if (params.search) q.set("search", params.search);
+  if (params.sort) q.set("sort", params.sort);
   q.set("limit", String(params.limit ?? 25));
   q.set("offset", String(params.offset ?? 0));
   return apiClient<RiskListResponse>(`/admin/risk?${q}`);

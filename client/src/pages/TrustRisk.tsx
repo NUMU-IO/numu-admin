@@ -5,8 +5,11 @@
  * screen where a human agrees or disagrees with the score. Three rules from
  * the design system shape it:
  *
- *   - the queue is oldest-first, not scariest-first, so nothing ages out
- *     unreviewed while reviewers work the top of a sorted list;
+ *   - the queue is newest-first and never by score. Sorting by score looks
+ *     decisive and starves everything below the top band; sorting oldest-first
+ *     put four-month-old assessments at the top of every page, so the order
+ *     that came in this morning — the one a decision can still change — was
+ *     never on screen. Oldest is still one click away;
  *   - a score is never shown alone — the signals behind it sit next to it,
  *     because a bare number is not something anyone can disagree with;
  *   - the decision buttons stay disabled until a reason is written.
@@ -25,6 +28,7 @@ import {
   KeyValue,
   Pagination,
   RiskScore,
+  Select,
   StatusBadge,
   Textarea,
   type DataTableColumn,
@@ -35,6 +39,7 @@ import {
   listRisk,
   type RiskDecision,
   type RiskItem,
+  type RiskSort,
   type RiskLevelFilter,
   type RiskStateFilter,
 } from "@/services/riskApi";
@@ -68,6 +73,9 @@ export default function TrustRisk() {
 
   const [level, setLevel] = useState<RiskLevelFilter>("all");
   const [state, setState] = useState<RiskStateFilter>("open");
+  // Newest first. Never by score — that starves everything below the top
+  // band — but oldest is one click away for a backlog sweep.
+  const [sort, setSort] = useState<RiskSort>("newest");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
 
@@ -78,6 +86,7 @@ export default function TrustRisk() {
     level,
     state,
     search: search || undefined,
+    sort,
     limit: PAGE_SIZE,
     offset: (page - 1) * PAGE_SIZE,
   };
@@ -176,7 +185,7 @@ export default function TrustRisk() {
   return (
     <DashboardLayout
       title="Trust & risk"
-      subtitle="Scored cash-on-delivery orders, oldest first. A decision needs a reason."
+      subtitle="Scored cash-on-delivery orders. A decision needs a reason."
       meta={
         <>
           <span>{formatNumber(counts.open)} awaiting review</span>
@@ -214,6 +223,18 @@ export default function TrustRisk() {
                   {s === "open" ? "Awaiting" : s === "decided" ? "Decided" : "All"}
                 </Button>
               ))}
+              <Select
+                aria-label="Sort order"
+                value={sort}
+                onChange={(e) => {
+                  setSort(e.target.value as RiskSort);
+                  setPage(1);
+                }}
+                options={[
+                  { value: "newest", label: "Newest first" },
+                  { value: "oldest", label: "Longest waiting" },
+                ]}
+              />
             </>
           }
         />
