@@ -22,6 +22,7 @@ import {
   FilterBar,
   MetricCard,
   Pagination,
+  Select,
   StatusBadge,
   type DataTableColumn,
 } from "@/ds";
@@ -30,6 +31,7 @@ import {
   getLeadStats,
   listLeads,
   type Lead,
+  type LeadFilters,
   type LeadStatusFilter,
 } from "@/services/leadsApi";
 import { useQuery } from "@tanstack/react-query";
@@ -47,6 +49,68 @@ const VIEWS: { id: LeadStatusFilter; label: string }[] = [
   { id: "activated", label: "Activated" },
 ];
 
+/* ── Facet options ──────────────────────────────────────────────────────
+   These mirror the values the merchant qualification form writes, so a
+   filter that matches nothing means nobody answered that way — not that the
+   option was spelled differently here. */
+
+const SELLS_WHAT = [
+  { value: "fashion", label: "Fashion" },
+  { value: "electronics", label: "Electronics" },
+  { value: "beauty", label: "Beauty" },
+  { value: "home", label: "Home" },
+  { value: "food", label: "Food" },
+  { value: "accessories", label: "Accessories" },
+  { value: "other", label: "Other" },
+];
+
+const SELLS_WHERE = [
+  { value: "instagram", label: "Instagram / Facebook" },
+  { value: "shopify", label: "Shopify" },
+  { value: "zid", label: "Zid" },
+  { value: "salla", label: "Salla" },
+  { value: "own_site", label: "Own site" },
+  { value: "offline", label: "Physical shop" },
+  { value: "nowhere", label: "Not selling yet" },
+];
+
+const ORDER_BANDS = [
+  { value: "0", label: "Not started" },
+  { value: "1-50", label: "Under 50" },
+  { value: "51-200", label: "50 – 200" },
+  { value: "201-1000", label: "200 – 1,000" },
+  { value: "1000+", label: "Over 1,000" },
+];
+
+const PLANS = [
+  { value: "payg", label: "Pay as you Grow" },
+  { value: "starter", label: "Starter" },
+  { value: "pro", label: "Pro" },
+];
+
+/** One facet dropdown whose empty option clears rather than filters. */
+function Facet({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value?: string;
+  options: { value: string; label: string }[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <Select
+      aria-label={label}
+      value={value ?? ""}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={label}
+      options={options}
+    />
+  );
+}
+
 const STATUS_BADGE: Record<string, "new" | "trial" | "active" | "draft" | "churned"> = {
   new: "new",
   demo_started: "trial",
@@ -61,8 +125,29 @@ export default function Leads() {
   const [view, setView] = useState<LeadStatusFilter>("all");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  // Facet values are held as strings — "" means "any" — so one setter and one
+  // clear cover all of them, and the Select's own empty option is the reset.
+  const [facets, setFacets] = useState<Record<string, string>>({});
 
-  const params = { page, pageSize: PAGE_SIZE, status: view, q: search || undefined };
+  const setFacet = (key: string, value: string) => {
+    setFacets((f) => ({ ...f, [key]: value }));
+    // Any filter change resets to page 1. Staying on page 7 of a freshly
+    // narrowed result set shows an empty table and reads as a bug.
+    setPage(1);
+  };
+  const activeFacets = Object.values(facets).filter(Boolean).length;
+  const clearFacets = () => {
+    setFacets({});
+    setPage(1);
+  };
+
+  const params: LeadFilters = {
+    page,
+    pageSize: PAGE_SIZE,
+    status: view,
+    q: search || undefined,
+    ...facets,
+  };
 
   const { data, isLoading } = useQuery({
     queryKey: ["leads", "list", params],
@@ -276,8 +361,65 @@ export default function Leads() {
             setPage(1);
           }}
           searchPlaceholder="Email, name, phone or subdomain"
-          actions={<span className="numu-label">{formatNumber(data?.total)} matching</span>}
-        />
+          actions={
+            <>
+              <span className="numu-label">{formatNumber(data?.total)} matching</span>
+              {activeFacets ? (
+                <Button size="sm" variant="ghost" icon="x" onClick={clearFacets}>
+                  Clear {activeFacets}
+                </Button>
+              ) : null}
+            </>
+          }
+        >
+          {/* These build a CALL LIST, not a browse view. "Fashion merchants
+              doing 200+ orders a month in Cairo who registered and never sold"
+              is the question an operator actually has, and it is only
+              answerable if every facet the qualification form collects is
+              filterable. */}
+          <Facet
+            label="Sells"
+            value={facets.sellsWhat}
+            options={SELLS_WHAT}
+            onChange={(v) => setFacet("sellsWhat", v)}
+          />
+          <Facet
+            label="Sells on"
+            value={facets.sellsWhereToday}
+            options={SELLS_WHERE}
+            onChange={(v) => setFacet("sellsWhereToday", v)}
+          />
+          <Facet
+            label="Volume"
+            value={facets.monthlyOrdersBand}
+            options={ORDER_BANDS}
+            onChange={(v) => setFacet("monthlyOrdersBand", v)}
+          />
+          <Facet
+            label="Plan"
+            value={facets.plan}
+            options={PLANS}
+            onChange={(v) => setFacet("plan", v)}
+          />
+          <Facet
+            label="Reachable"
+            value={facets.hasPhone}
+            options={[
+              { value: "true", label: "Has a phone" },
+              { value: "false", label: "Email only" },
+            ]}
+            onChange={(v) => setFacet("hasPhone", v)}
+          />
+          <Facet
+            label="Profile"
+            value={facets.businessComplete}
+            options={[
+              { value: "true", label: "Qualified" },
+              { value: "false", label: "Incomplete" },
+            ]}
+            onChange={(v) => setFacet("businessComplete", v)}
+          />
+        </FilterBar>
         <DataTable
           columns={columns}
           rows={leads}

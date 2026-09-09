@@ -94,21 +94,76 @@ export interface LeadStats {
   business_profiles_complete: number;
 }
 
-export function listLeads(params: {
+/**
+ * The full filter set `/admin/leads` accepts.
+ *
+ * These are for BUILDING A CALL LIST, not for browsing: "fashion merchants
+ * doing 200+ orders a month in Cairo who registered and never sold" is the
+ * question an operator actually has, and it is only answerable if every facet
+ * the qualification form collects is filterable.
+ */
+export interface LeadFilters {
   page?: number;
   pageSize?: number;
   status?: LeadStatusFilter;
   source?: "all" | "demo" | "signup";
+  utmSource?: string;
+  utmCampaign?: string;
   hasPhone?: boolean;
+  sellsWhat?: string;
+  sellsWhereToday?: string;
+  monthlyOrdersBand?: string;
+  city?: string;
+  plan?: string;
+  planIntent?: string;
+  lifecycleState?: string;
+  isRegisteredBusiness?: boolean;
+  businessComplete?: boolean;
+  activated?: boolean;
+  createdFrom?: string;
+  createdTo?: string;
+  sort?: "created_desc" | "created_asc" | "last_seen_desc" | "activated_desc";
   q?: string;
-}): Promise<PaginatedLeads> {
+}
+
+const PARAM_NAMES: Record<keyof LeadFilters, string> = {
+  page: "page",
+  pageSize: "page_size",
+  status: "status",
+  source: "source",
+  utmSource: "utm_source",
+  utmCampaign: "utm_campaign",
+  hasPhone: "has_phone",
+  sellsWhat: "sells_what",
+  sellsWhereToday: "sells_where_today",
+  monthlyOrdersBand: "monthly_orders_band",
+  city: "city",
+  plan: "plan",
+  planIntent: "plan_intent",
+  lifecycleState: "lifecycle_state",
+  isRegisteredBusiness: "is_registered_business",
+  businessComplete: "business_complete",
+  activated: "activated",
+  createdFrom: "created_from",
+  createdTo: "created_to",
+  sort: "sort",
+  q: "q",
+};
+
+export function listLeads(params: LeadFilters = {}): Promise<PaginatedLeads> {
   const s = new URLSearchParams();
   s.set("page", String(params.page ?? 1));
   s.set("page_size", String(params.pageSize ?? 25));
-  if (params.status && params.status !== "all") s.set("status", params.status);
-  if (params.source && params.source !== "all") s.set("source", params.source);
-  if (params.hasPhone != null) s.set("has_phone", String(params.hasPhone));
-  if (params.q) s.set("q", params.q);
+
+  for (const [key, value] of Object.entries(params)) {
+    if (key === "page" || key === "pageSize") continue;
+    // `false` is a meaningful filter value ("has no phone"), and "all" means
+    // no filter, so only those and empty values are treated as absent.
+    if (value === undefined || value === null || value === "" || value === "all") continue;
+    const name = PARAM_NAMES[key as keyof LeadFilters];
+    if (name) s.set(name, String(value));
+  }
+
   return apiClient<PaginatedLeads>(`/admin/leads/?${s}`);
 }
 
