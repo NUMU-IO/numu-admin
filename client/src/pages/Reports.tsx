@@ -1,67 +1,54 @@
 /**
- * Reports Page - NUMU Admin Dashboard
+ * Reports — CSV exports of platform data.
  *
- * Generate and download CSV reports for orders, customers,
- * merchants, and revenue summary.
+ * Everything is generated in the browser from the same endpoints the list
+ * pages read, so nothing leaves the operator's machine.
+ *
+ * Money columns export as plain numbers in EGP major units, not as
+ * formatted currency strings. An operator opens these in a spreadsheet and
+ * sums them; "EGP 1,240.00" is text, and it was also labelled USD.
  */
 
 import DashboardLayout from "@/components/DashboardLayout";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+import { Banner, Button, Card, FormField, Input, KeyValue } from "@/ds";
+import { getCustomers } from "@/services/customerService";
+import { getDashboardStats } from "@/services/dashboardService";
+import { getMerchants } from "@/services/merchantService";
+import { getOrders } from "@/services/orderService";
+import type { NumuIconName } from "@/ds";
 import { useState } from "react";
 import { toast } from "sonner";
-import { getOrders } from "@/services/orderService";
-import { getCustomers } from "@/services/customerService";
-import { getMerchants } from "@/services/merchantService";
-import { getDashboardStats } from "@/services/dashboardService";
-import {
-  Download,
-  FileText,
-  Users,
-  Building2,
-  ShoppingCart,
-  DollarSign,
-  Loader2,
-} from "lucide-react";
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+/** Piasters → a bare number a spreadsheet can add up. */
+const egp = (piasters: number | null | undefined) => ((piasters ?? 0) / 100).toFixed(2);
 
-function formatCurrency(cents: number) {
-  return `$${(cents / 100).toFixed(2)}`;
-}
+const isoDate = (d: Date) => d.toISOString().split("T")[0];
 
 function today() {
-  return new Date().toISOString().split("T")[0];
+  return isoDate(new Date());
 }
 
 function thirtyDaysAgo() {
   const d = new Date();
   d.setDate(d.getDate() - 30);
-  return d.toISOString().split("T")[0];
+  return isoDate(d);
 }
 
-/** Convert array of objects to CSV string */
 function toCSV(rows: Record<string, unknown>[]): string {
   if (!rows.length) return "";
   const headers = Object.keys(rows[0]);
   const escape = (v: unknown) => {
     const s = String(v ?? "");
-    return s.includes(",") || s.includes('"') || s.includes("\n")
-      ? `"${s.replace(/"/g, '""')}"`
-      : s;
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
-  const lines = [
+  return [
     headers.join(","),
     ...rows.map((row) => headers.map((h) => escape(row[h])).join(",")),
-  ];
-  return lines.join("\n");
+  ].join("\n");
 }
 
-/** Trigger browser download of a CSV string */
 function downloadCSV(csv: string, filename: string) {
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
   const a = document.createElement("a");
   a.href = url;
   a.download = filename;
@@ -69,266 +56,212 @@ function downloadCSV(csv: string, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-// ── Report definitions ────────────────────────────────────────────────────────
-
 interface ReportDef {
   id: string;
   title: string;
   description: string;
-  icon: React.ElementType;
-  iconBg: string;
-  iconColor: string;
+  icon: NumuIconName;
   columns: string;
-  usesDateRange: boolean;
 }
 
 const REPORTS: ReportDef[] = [
   {
     id: "orders",
-    title: "Orders Report",
-    description: "All platform orders with status, customer info, and totals",
-    icon: ShoppingCart,
-    iconBg: "bg-purple-50",
-    iconColor: "text-purple-600",
-    columns: "Order ID, Merchant, Customer, Status, Payment Status, Total, Date",
-    usesDateRange: false,
+    title: "Orders",
+    description: "Up to 500 of the most recent orders across every merchant.",
+    icon: "cart",
+    columns: "order_id, merchant, customer, status, payment_status, total_egp, date",
   },
   {
     id: "customers",
-    title: "Customers Report",
-    description: "All registered customers across all merchants",
-    icon: Users,
-    iconBg: "bg-blue-50",
-    iconColor: "text-blue-600",
-    columns: "Customer ID, Merchant, Name, Email, Phone, Total Orders, Total Spent, Joined",
-    usesDateRange: false,
+    title: "Customers",
+    description: "Up to 300 of the most recent customers across every merchant.",
+    icon: "users",
+    columns: "customer_id, merchant, name, email, phone, orders, spent_egp, joined",
   },
   {
     id: "merchants",
-    title: "Merchants Report",
-    description: "All merchant stores with plan, status, and revenue",
-    icon: Building2,
-    iconBg: "bg-amber-50",
-    iconColor: "text-amber-600",
-    columns: "Merchant ID, Name, Email, Domain, Plan, Status, Total Revenue, Total Orders, Created",
-    usesDateRange: false,
+    title: "Merchants",
+    description: "Up to 200 stores with plan, status and lifetime revenue.",
+    icon: "building",
+    columns: "store_id, name, email, domain, plan, status, revenue_egp, orders, created",
   },
   {
     id: "revenue",
-    title: "Revenue Summary",
-    description: "Platform-wide revenue KPIs and month-over-month changes",
-    icon: DollarSign,
-    iconBg: "bg-emerald-50",
-    iconColor: "text-emerald-600",
-    columns: "Metric, Current Value, MoM Change",
-    usesDateRange: false,
+    title: "Revenue summary",
+    description: "Platform KPIs with their month-over-month change.",
+    icon: "banknote",
+    columns: "metric, value, mom_change",
   },
 ];
 
-// ── Main page ─────────────────────────────────────────────────────────────────
-
 export default function Reports() {
-  const [loading, setLoading] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
   const [dateFrom, setDateFrom] = useState(thirtyDaysAgo());
   const [dateTo, setDateTo] = useState(today());
 
-  async function handleGenerate(reportId: string) {
-    setLoading(reportId);
+  async function generate(reportId: string) {
+    setBusy(reportId);
     try {
       const filename = `numu_${reportId}_${dateFrom}_${dateTo}.csv`;
 
       if (reportId === "orders") {
-        // Fetch up to 500 orders (multiple pages if needed)
-        const [p1, p2, p3, p4, p5] = await Promise.all([
-          getOrders({ limit: 100, offset: 0 }),
-          getOrders({ limit: 100, offset: 100 }),
-          getOrders({ limit: 100, offset: 200 }),
-          getOrders({ limit: 100, offset: 300 }),
-          getOrders({ limit: 100, offset: 400 }),
-        ]);
-        const all = [
-          ...p1.orders,
-          ...p2.orders,
-          ...p3.orders,
-          ...p4.orders,
-          ...p5.orders,
-        ];
-        const rows = all.map((o) => ({
-          "Order ID": o.orderId,
-          Merchant: o.merchantId,
-          Customer: o.customerName || o.customerEmail || o.customerId || "",
-          Status: o.status,
-          "Payment Status": o.paymentStatus,
-          "Total (USD)": formatCurrency(o.total),
-          Date: o.createdAt.toISOString().split("T")[0],
-        }));
+        const pages = await Promise.all(
+          [0, 100, 200, 300, 400].map((offset) => getOrders({ limit: 100, offset })),
+        );
+        const rows = pages
+          .flatMap((p) => p.orders)
+          .map((o) => ({
+            order_id: o.orderId,
+            merchant: o.merchantId,
+            customer: o.customerName || o.customerEmail || o.customerId || "",
+            status: o.status,
+            payment_status: o.paymentStatus,
+            currency: o.currency ?? "EGP",
+            total: egp(o.total),
+            date: isoDate(o.createdAt),
+          }));
         downloadCSV(toCSV(rows), filename);
       } else if (reportId === "customers") {
-        const [p1, p2, p3] = await Promise.all([
-          getCustomers({ limit: 100, offset: 0 }),
-          getCustomers({ limit: 100, offset: 100 }),
-          getCustomers({ limit: 100, offset: 200 }),
-        ]);
-        const all = [...p1.customers, ...p2.customers, ...p3.customers];
-        const rows = all.map((c) => ({
-          "Customer ID": c.customerId,
-          Merchant: c.merchantId,
-          Name: c.name || "",
-          Email: c.email,
-          Phone: c.phone || "",
-          "Total Orders": c.totalOrders ?? 0,
-          "Total Spent (USD)": formatCurrency(c.totalSpent ?? 0),
-          Joined: c.createdAt.toISOString().split("T")[0],
-        }));
+        const pages = await Promise.all(
+          [0, 100, 200].map((offset) => getCustomers({ limit: 100, offset })),
+        );
+        const rows = pages
+          .flatMap((p) => p.customers)
+          .map((c) => ({
+            customer_id: c.customerId,
+            merchant: c.merchantId,
+            name: c.name || "",
+            email: c.email,
+            phone: c.phone || "",
+            orders: c.totalOrders ?? 0,
+            spent_egp: egp(c.totalSpent),
+            joined: isoDate(c.createdAt),
+          }));
         downloadCSV(toCSV(rows), filename);
       } else if (reportId === "merchants") {
         const { merchants } = await getMerchants({ limit: 200 });
         const rows = merchants.map((m) => ({
-          "Merchant ID": m.merchantId,
-          Name: m.name,
-          Email: m.email,
-          Domain: m.domain || "",
-          Plan: m.plan,
-          Status: m.status,
-          "Total Revenue (USD)": formatCurrency(m.totalRevenue ?? 0),
-          "Total Orders": m.totalOrders ?? 0,
-          Created: m.createdAt.toISOString().split("T")[0],
+          store_id: m.merchantId,
+          name: m.name,
+          email: m.email,
+          domain: m.domain || "",
+          plan: m.plan,
+          status: m.status,
+          internal: m.isInternal ? "yes" : "no",
+          revenue_egp: egp(m.totalRevenue),
+          orders: m.totalOrders ?? 0,
+          created: isoDate(m.createdAt),
         }));
         downloadCSV(toCSV(rows), filename);
       } else if (reportId === "revenue") {
         const stats = await getDashboardStats();
+        const pct = (n: number) => `${n >= 0 ? "+" : ""}${n.toFixed(1)}%`;
         const rows = [
           {
-            Metric: "Total Revenue",
-            "Current Value": formatCurrency(stats.totalRevenue),
-            "MoM Change": `${stats.revenueChange >= 0 ? "+" : ""}${stats.revenueChange.toFixed(1)}%`,
+            metric: "gross_merchant_revenue_egp",
+            value: egp(stats.totalRevenue),
+            mom_change: pct(stats.revenueChange),
+          },
+          { metric: "mrr_egp", value: egp(stats.mrr.total), mom_change: "" },
+          {
+            metric: "mrr_subscribers",
+            value: stats.mrr.subscriberCount,
+            mom_change: "",
           },
           {
-            Metric: "Active Merchants",
-            "Current Value": stats.activeMerchants,
-            "MoM Change": `${stats.merchantsChange >= 0 ? "+" : ""}${stats.merchantsChange.toFixed(1)}%`,
+            metric: "active_merchants",
+            value: stats.activeMerchants,
+            mom_change: pct(stats.merchantsChange),
           },
           {
-            Metric: "Total Orders",
-            "Current Value": stats.totalOrders,
-            "MoM Change": `${stats.ordersChange >= 0 ? "+" : ""}${stats.ordersChange.toFixed(1)}%`,
+            metric: "total_orders",
+            value: stats.totalOrders,
+            mom_change: pct(stats.ordersChange),
           },
           {
-            Metric: "Total Customers",
-            "Current Value": stats.totalCustomers,
-            "MoM Change": `${stats.customersChange >= 0 ? "+" : ""}${stats.customersChange.toFixed(1)}%`,
-          },
-          {
-            Metric: "Platform Earnings (2.5%)",
-            "Current Value": formatCurrency(Math.round(stats.totalRevenue * 0.025)),
-            "MoM Change": `${stats.revenueChange >= 0 ? "+" : ""}${stats.revenueChange.toFixed(1)}%`,
+            metric: "total_customers",
+            value: stats.totalCustomers,
+            mom_change: pct(stats.customersChange),
           },
         ];
         downloadCSV(toCSV(rows), filename);
       }
 
-      toast.success(`${reportId.charAt(0).toUpperCase() + reportId.slice(1)} report downloaded`);
-    } catch {
-      toast.error("Failed to generate report. Please try again.");
+      toast.success("Report downloaded", { description: filename });
+    } catch (e) {
+      toast.error((e as Error).message || "The export did not complete.");
     } finally {
-      setLoading(null);
+      setBusy(null);
     }
   }
 
   return (
-    <DashboardLayout title="Reports" subtitle="Generate and download platform data exports">
-      {/* Date range */}
-      <div className="dashboard-card mb-6">
-        <div className="flex items-center gap-2 mb-3">
-          <FileText className="w-4 h-4 text-muted-foreground" />
-          <h3 className="text-sm font-semibold">Report Period</h3>
-          <Badge className="bg-muted text-muted-foreground text-xs">
-            Note: date range is included in the filename only; data reflects all-time records
-          </Badge>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <label className="text-xs text-muted-foreground whitespace-nowrap">From</label>
+    <DashboardLayout
+      title="Reports"
+      subtitle="CSV exports, generated in your browser."
+    >
+      <Banner tone="info" icon="info" title="The dates name the file, they do not filter it">
+        Every export returns the most recent records the API will serve. Filter
+        in the spreadsheet, or use the export button on a filtered list page.
+      </Banner>
+
+      <Card title="Report period" subtitle="Filename only">
+        <div className="ak-cell-line">
+          <FormField label="From" htmlFor="report-from">
             <Input
+              id="report-from"
               type="date"
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
-              className="h-8 text-sm w-40"
             />
-          </div>
-          <div className="flex items-center gap-2">
-            <label className="text-xs text-muted-foreground whitespace-nowrap">To</label>
+          </FormField>
+          <FormField label="To" htmlFor="report-to">
             <Input
+              id="report-to"
               type="date"
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
-              className="h-8 text-sm w-40"
             />
-          </div>
+          </FormField>
         </div>
-      </div>
+      </Card>
 
-      {/* Report cards */}
-      <div className="grid sm:grid-cols-2 gap-4">
+      <div className="ak-2col">
         {REPORTS.map((report) => (
-          <div key={report.id} className="dashboard-card flex flex-col gap-4">
-            <div className="flex items-start gap-4">
-              <div
-                className={`w-10 h-10 rounded-xl ${report.iconBg} flex items-center justify-center flex-shrink-0`}
-              >
-                <report.icon className={`w-5 h-5 ${report.iconColor}`} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <h3 className="text-sm font-semibold">{report.title}</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">{report.description}</p>
-                <p className="text-xs text-muted-foreground/70 mt-2 font-mono leading-relaxed">
-                  {report.columns}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between pt-2 border-t border-border/50">
-              <Badge className="bg-muted text-muted-foreground text-xs">CSV</Badge>
+          <Card
+            key={report.id}
+            title={report.title}
+            subtitle="CSV"
+            footer={
               <Button
                 size="sm"
-                variant="outline"
-                onClick={() => handleGenerate(report.id)}
-                disabled={loading !== null}
-                className="gap-2 h-8"
+                variant="subtle"
+                icon="download"
+                loading={busy === report.id}
+                disabled={busy !== null && busy !== report.id}
+                onClick={() => generate(report.id)}
               >
-                {loading === report.id ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    Generating…
-                  </>
-                ) : (
-                  <>
-                    <Download className="w-3.5 h-3.5" />
-                    Download
-                  </>
-                )}
+                Download
               </Button>
+            }
+          >
+            <div className="ak-stack">
+              <p style={{ fontSize: "var(--fs-app-sm)" }}>{report.description}</p>
+              <KeyValue items={[{ label: "Columns", value: report.columns, mono: true }]} />
             </div>
-          </div>
+          </Card>
         ))}
       </div>
 
-      {/* Info footer */}
-      <div className="mt-6 dashboard-card">
-        <div className="flex items-start gap-3">
-          <FileText className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-          <div>
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
-              About Reports
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Reports export all available data from the platform. For large datasets, export may
-              take a few seconds. Files are generated client-side and downloaded directly to your
-              device — no data is sent to external services.
-            </p>
-          </div>
-        </div>
-      </div>
+      <Card title="About these exports" subtitle="Handling">
+        <p style={{ fontSize: "var(--fs-app-sm)", maxWidth: "var(--measure)" }}>
+          Files are built in this browser tab from the admin API and saved
+          straight to your device — nothing is sent to a third party. They
+          contain merchant and customer personal data, so treat a downloaded
+          file the way you would treat the database it came from.
+        </p>
+      </Card>
     </DashboardLayout>
   );
 }

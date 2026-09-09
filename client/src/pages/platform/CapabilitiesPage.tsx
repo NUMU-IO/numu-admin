@@ -31,6 +31,7 @@
  */
 
 import DashboardLayout from "@/components/DashboardLayout";
+import { Button as NumuButton } from "@/ds";
 import { DashboardLayoutSkeleton } from "@/components/DashboardLayoutSkeleton";
 import {
   AlertDialog,
@@ -310,39 +311,26 @@ export default function CapabilitiesPage() {
   ).length;
 
   return (
-    <DashboardLayout title="Capability registry">
-      <div className="p-6 space-y-6">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div className="max-w-3xl">
-            <h1 className="text-2xl font-semibold">Capability registry</h1>
-            <p className="text-sm text-muted-foreground">
-              The control plane for what may extend NUMU. Every capability an
-              extension can request — dynamic sources, sections, layout
-              injections, app embeds, data types, guarantees — is registered
-              here with the tier allowed to hold it. A manifest is a{" "}
-              <em>request</em>; this registry is what turns it into a grant.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => void listQuery.refetch()}
-              disabled={listQuery.isFetching}
-            >
-              {listQuery.isFetching ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4 mr-2" />
-              )}
-              Refresh
-            </Button>
-            <Button size="sm" onClick={() => setCreateOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Register capability
-            </Button>
-          </div>
-        </div>
+    <DashboardLayout
+      title="Capability registry"
+      subtitle="What may extend NUMU. A manifest is a request; this registry is what turns it into a grant."
+      actions={
+        <>
+          <NumuButton
+            variant="subtle"
+            icon="refresh"
+            loading={listQuery.isFetching}
+            onClick={() => void listQuery.refetch()}
+          >
+            Refresh
+          </NumuButton>
+          <NumuButton icon="plus" onClick={() => setCreateOpen(true)}>
+            Register capability
+          </NumuButton>
+        </>
+      }
+    >
+      <div className="ak-stack">
 
         {/* Kill-switch banner. If anything is suspended right now that is the
             single most important fact on the page — an operator debugging a

@@ -9,6 +9,7 @@
 
 import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
+import { Banner } from "@/ds";
 import { DashboardLayoutSkeleton } from "@/components/DashboardLayoutSkeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -838,14 +839,7 @@ export default function Settings() {
               <div className="grid gap-4 max-w-md">
                 <div className="space-y-2">
                   <Label htmlFor="metaAppId">META_APP_ID</Label>
-                  <Input
-                    id="metaAppId"
-                    placeholder="Enter your Meta App ID"
-                    value={platformSettings.platformName}
-                    onChange={(e) =>
-                      setPlatformSettings((s) => ({ ...s, platformName: e.target.value }))
-                    }
-                  />
+                  <Input id="metaAppId" placeholder="Enter your Meta App ID" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="metaAppSecret">META_APP_SECRET</Label>
@@ -870,17 +864,21 @@ export default function Settings() {
                   />
                 </div>
               </div>
-              <div className="flex items-center gap-2 pt-4">
-                <Button onClick={handleSave} disabled={saving}>
-                  {saving ? "Saving..." : "Save Credentials"}
-                </Button>
-                <Button variant="outline" onClick={() => toast.info("Test connection coming soon")}>
-                  Test Connection
-                </Button>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                These credentials are used for Meta (Facebook, Instagram, WhatsApp) OAuth flows and webhook verification.
-              </p>
+              {/* This panel has no backend. The four fields above were never
+                  persisted, and the save button called the platform-settings
+                  mutation — so typing an App ID here and pressing save renamed
+                  the platform. The fields stay as a reference for what the API
+                  reads; the misleading save is gone. */}
+              <Banner
+                tone="info"
+                icon="lock"
+                title="Meta credentials are configured on the API, not here"
+              >
+                META_APP_ID, META_APP_SECRET, META_WEBHOOK_VERIFY_TOKEN and
+                META_LOGIN_CONFIG_ID are read from the API's environment at boot.
+                Change them on the API host and restart; nothing typed on this
+                screen is saved.
+              </Banner>
             </CardContent>
           </Card>
         </TabsContent>

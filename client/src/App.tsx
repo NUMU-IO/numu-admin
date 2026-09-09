@@ -37,18 +37,12 @@ import ThemeDetailPage from "./pages/marketplace/ThemeDetailPage";
 import StoreSnapshotsPage from "./pages/marketplace/StoreSnapshotsPage";
 import PlatformSettingsPage from "./pages/platform/SettingsPage";
 import CapabilitiesPage from "./pages/platform/CapabilitiesPage";
-
-// Placeholder page for features not yet implemented
-function ComingSoon({ title }: { title: string }) {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="text-2xl font-bold mb-2">{title}</h1>
-        <p className="text-muted-foreground">This feature is coming soon</p>
-      </div>
-    </div>
-  );
-}
+import ComponentShowcase from "./pages/ComponentShowcase";
+import TrustRisk from "./pages/TrustRisk";
+import SupportCases from "./pages/SupportCases";
+import Campaigns from "./pages/Campaigns";
+import Leads from "./pages/Leads";
+import Marketing from "./pages/Marketing";
 
 /**
  * Wraps a page component with auth protection.
@@ -153,6 +147,21 @@ function Router() {
       <Route path="/marketplace/review">
         {() => <ProtectedRoute component={MarketplaceReview} />}
       </Route>
+      <Route path="/trust-risk">
+        {() => <ProtectedRoute component={TrustRisk} />}
+      </Route>
+      <Route path="/support-cases">
+        {() => <ProtectedRoute component={SupportCases} />}
+      </Route>
+      <Route path="/campaigns">
+        {() => <ProtectedRoute component={Campaigns} />}
+      </Route>
+      <Route path="/leads">
+        {() => <ProtectedRoute component={Leads} />}
+      </Route>
+      <Route path="/marketing">
+        {() => <ProtectedRoute component={Marketing} />}
+      </Route>
       <Route path="/whatsapp-access">
         {() => <ProtectedRoute component={WhatsappAccessRequests} />}
       </Route>
@@ -189,6 +198,11 @@ function Router() {
           (ADR-0 / ADR-6). Sits next to /platform/settings under Platform. */}
       <Route path="/platform/capabilities">
         {() => <ProtectedRoute component={CapabilitiesPage} />}
+      </Route>
+      {/* Live reference for the NUMU design system — what every component
+          actually looks like inside this shell. */}
+      <Route path="/design-system">
+        {() => <ProtectedRoute component={ComponentShowcase} />}
       </Route>
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />

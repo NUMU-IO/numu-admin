@@ -1,0 +1,68 @@
+/* PRIMITIVE — spacing, 4-pt grid. 72 is the largest step; marketing sections
+   compose from 72 + 48, never from a new one-off value. */
+:root {
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+  --sp-8: 72px;
+  --sp-9: 112px;
+
+  /* PRIMITIVE — radii. Radius is how the three visual registers are told
+     apart: brand 2, editorial 4, app 10. */
+  --r-xs: 2px;
+  --r-sm: 4px;
+  --r-md: 8px;
+  --r-lg: 10px;
+  --r-xl: 14px;
+  --r-pill: 999px;
+
+  /* PRIMITIVE — borders */
+  --bw-hairline: 1px; /* @kind other */
+  --bw-brand: 1.5px; /* @kind other */
+  --bw-focus: 2px; /* @kind other */
+
+  /* PRIMITIVE — elevation. Brand and editorial surfaces stay flat; shadows
+     are an application tool only. */
+  --sh-xs: 0 1px 2px 0 hsl(0 0% 0% / 0.03);
+  --sh-sm: 0 1px 3px 0 hsl(0 0% 0% / 0.06), 0 1px 2px -1px hsl(0 0% 0% / 0.06);
+  --sh-md: 0 4px 6px -1px hsl(0 0% 0% / 0.05), 0 2px 4px -2px hsl(0 0% 0% / 0.05);
+  --sh-lg: 0 10px 15px -3px hsl(0 0% 0% / 0.05), 0 4px 6px -4px hsl(0 0% 0% / 0.05);
+  --sh-xl: 0 24px 48px -12px hsl(215 40% 12% / 0.18);
+
+  /* PRIMITIVE — motion. One easing for everything; two durations. */
+  --ease: cubic-bezier(0.16, 1, 0.3, 1); /* @kind other */
+  --dur-fast: 120ms; /* @kind other */
+  --dur-base: 200ms; /* @kind other */
+  --dur-slow: 320ms; /* @kind other */
+
+  /* PRIMITIVE — layout constants */
+  --shell-sidebar-w: 248px;
+  --shell-sidebar-w-collapsed: 60px;
+  --shell-topbar-h: 56px;
+  --row-h: 44px;
+  --row-h-dense: 36px;
+  --control-h: 40px;
+  --control-h-sm: 32px;
+  --tap-min: 44px; /* @kind other */
+  --measure: 68ch; /* @kind other */
+  --measure-ar: 58ch; /* @kind other */
+
+  /* PRIMITIVE — z */
+  --z-sticky: 10; /* @kind other */
+  --z-drawer: 40; /* @kind other */
+  --z-dialog: 50; /* @kind other */
+  --z-palette: 60; /* @kind other */
+  --z-toast: 70; /* @kind other */
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 1ms; /* @kind other */
+    --dur-base: 1ms; /* @kind other */
+    --dur-slow: 1ms; /* @kind other */
+  }
+}

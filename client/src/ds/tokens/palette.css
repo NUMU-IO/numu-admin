@@ -1,0 +1,82 @@
+/* PRIMITIVE COLOR — raw brand values. Never reference these directly from a
+   component; go through the semantic layer in semantic.css. */
+:root {
+  /* Navy — primary. 700 is the brand value; the ramp steps unevenly so
+     mid-tones have room for bar charts and hover darkening. */
+  --navy-900: #001f3f;
+  --navy-800: #002952;
+  --navy-700: #003366;
+  --navy-600: #1f4a7a;
+  --navy-500: #3b6593;
+  --navy-300: #8aa5c2;
+  --navy-100: #d6e0ec;
+  --navy-050: #eef3f8;
+  --navy: var(--navy-700);
+
+  /* Ink — text */
+  --ink: #0f1624;
+  --ink-soft: #5a6474;
+  --ink-faint: #8b93a1;
+  --ink-warm: #1a1410;
+  --ink-warm-soft: #5c5044;
+
+  /* Cool/operational grounds */
+  --cream: #f5efe6;
+  --paper: #fbf6ed;
+  --paper-hi: #fff9ee;
+  --white: #ffffff;
+  --bone: #eae0ce;
+  --bone-soft: #f0e8da;
+  --line: var(--bone);
+
+  /* Warm/editorial grounds */
+  --cream-warm: #f5ede0;
+  --cream-warm-2: #ebdfcc;
+  --cream-warm-3: #e0d0b6;
+  --line-warm: var(--cream-warm-3);
+
+  /* Editorial primary */
+  --sienna: #8b2500;
+  --sienna-2: #6b1c00;
+
+  /* Accents / semantic sources */
+  --terracotta: #c14a1c;
+  --terracotta-2: #9d3a13;
+  --saffron: #e8a430;
+  --saffron-2: #c1852094;
+  --sage: #6b8e68;
+  --sage-2: #557253;
+  --teal-ink: #1f4746;
+
+  /* Logo gradient companion. Reserved for the mark only — not a UI color. */
+  --violet: #6b46c1;
+
+  /* Readable text-on-tint pairs for the soft status fills. Hand-picked to
+     clear 4.5:1 on their own tint, not derived with color-mix. */
+  --on-sage-tint: #3d5c3a;
+  --on-saffron-tint: #8a5d12;
+  --on-terracotta-tint: #a03c13;
+  --on-navy-tint: var(--navy-700);
+
+  /* Tints — 4 fixed alpha steps per accent, used for status fills, chart
+     bands and selected rows. */
+  --tint-navy: rgba(0, 51, 102, 0.08);
+  --tint-navy-strong: rgba(0, 51, 102, 0.14);
+  --tint-sage: rgba(107, 142, 104, 0.18);
+  --tint-saffron: rgba(232, 164, 48, 0.2);
+  --tint-terracotta: rgba(193, 74, 28, 0.16);
+  --tint-ink: rgba(15, 22, 36, 0.05);
+  --tint-ink-strong: rgba(15, 22, 36, 0.09);
+
+  /* Data-viz ordered sequence. Navy-led, warm accents last, so an
+     operational chart never reads as marketing. Never encode status by
+     position in this ramp — status uses the semantic colors. */
+  --viz-1: #003366;
+  --viz-2: #3b6593;
+  --viz-3: #1f4746;
+  --viz-4: #6b8e68;
+  --viz-5: #e8a430;
+  --viz-6: #c14a1c;
+  --viz-7: #8aa5c2;
+  --viz-grid: rgba(15, 22, 36, 0.07);
+}

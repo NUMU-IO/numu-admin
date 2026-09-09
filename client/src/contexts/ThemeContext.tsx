@@ -31,11 +31,10 @@ export function ThemeProvider({
 
   useEffect(() => {
     const root = document.documentElement;
-    if (theme === "dark") {
-      root.classList.add("dark");
-    } else {
-      root.classList.remove("dark");
-    }
+    // `data-numu-theme` is what the design system's semantic layer keys on;
+    // the `dark` class stays for any component still written against it.
+    root.dataset.numuTheme = theme;
+    root.classList.toggle("dark", theme === "dark");
 
     if (switchable) {
       localStorage.setItem("theme", theme);

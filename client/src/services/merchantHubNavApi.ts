@@ -1,7 +1,7 @@
 /**
  * Admin API for merchant-hub nav config.
  *
- * Lets admins hide/show, mark coming-soon, or reorder each tab on the
+ * Lets admins hide/show, rename, mark coming-soon, or reorder each tab on the
  * merchant hub left sidebar. Backed by platform_config.key = "merchant_hub_nav".
  */
 
@@ -12,6 +12,13 @@ export interface MerchantHubNavTab {
   visible: boolean;
   coming_soon: boolean;
   order: number;
+  /**
+   * Renames the tab in the merchant hub. Empty = the hub's own translated
+   * name, which is the default and usually the right one: an override
+   * replaces BOTH languages, because one field cannot hold two. Clearing it
+   * gives the translations back.
+   */
+  label?: string;
 }
 
 export interface MerchantHubNavConfig {

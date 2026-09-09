@@ -1,366 +1,227 @@
 /**
- * Billing Page - NUMU Admin Dashboard
+ * Billing — what the platform earns, and from whom.
  *
- * Platform billing overview: revenue earned, merchant plan distribution,
- * and platform fee breakdown.
+ * Three things changed with the redesign, all because the numbers were
+ * wrong rather than because they were ugly.
+ *
+ * Money is EGP. Every amount on this page is an integer of piasters from
+ * the API; it was being formatted as US dollars, so a merchant with
+ * EGP 12,400 in orders read as "$12,400".
+ *
+ * The platform fee is read from the wallet settings the platform actually
+ * charges on, not from a 2.5% constant compiled into this file.
+ *
+ * The payment-provider table is gone. It listed four providers with
+ * hardcoded latencies and an "operational" badge, none of it measured, one
+ * of them a provider NUMU does not use. A monitoring panel that cannot go
+ * red is worse than no monitoring panel.
  */
 
 import DashboardLayout from "@/components/DashboardLayout";
-import { StatsCard } from "@/components/dashboard";
-import { Badge } from "@/components/ui/badge";
-import { useQuery } from "@tanstack/react-query";
-import { useAuth } from "@/_core/hooks/useAuth";
+import {
+  BarChart,
+  Banner,
+  Card,
+  DataTable,
+  EmptyState,
+  MetricCard,
+  type DataTableColumn,
+} from "@/ds";
+import {
+  formatCompact,
+  formatDelta,
+  formatMoney,
+  formatMoneyShort,
+  formatNumber,
+} from "@/lib/format";
 import { getDashboardStats } from "@/services/dashboardService";
 import { getMerchants } from "@/services/merchantService";
-import {
-  PieChart,
-  Pie,
-  Cell,
-  Legend,
-  Tooltip,
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-} from "recharts";
-import {
-  DollarSign,
-  Building2,
-  TrendingUp,
-  CreditCard,
-  CheckCircle2,
-  AlertCircle,
-} from "lucide-react";
+import { getWalletSettings } from "@/services/walletAdminApi";
+import { useQuery } from "@tanstack/react-query";
 
-// ── Constants ─────────────────────────────────────────────────────────────────
-
-const PLATFORM_FEE_PCT = 2.5; // 2.5% platform fee
-
-const PLAN_COLORS: Record<string, string> = {
-  free: "#9ca3af",
-  starter: "#3b82f6",
-  growth: "#a855f7",
-  pro: "#10b981",
-  enterprise: "#f59e0b",
-};
-
-const PAYMENT_PROVIDERS = [
-  { name: "Stripe", status: "operational", latency: "42ms" },
-  { name: "Paymob", status: "operational", latency: "78ms" },
-  { name: "Fawry", status: "operational", latency: "95ms" },
-  { name: "Cash on Delivery", status: "operational", latency: "—" },
-];
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function formatCurrency(cents: number) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-    notation: cents >= 1_000_000_00 ? "compact" : "standard",
-  }).format(cents / 100);
+interface PlanRow {
+  plan: string;
+  merchants: number;
+  revenue: number;
 }
 
-function formatNum(n: number) {
-  return new Intl.NumberFormat("en-US").format(n);
-}
-
-function capitalise(s: string) {
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
-// ── Tooltip ───────────────────────────────────────────────────────────────────
-
-function PlanTooltip({ active, payload }: any) {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="bg-card border border-border rounded-lg px-3 py-2 shadow-lg text-xs">
-      <p className="font-semibold mb-1">{payload[0].name}</p>
-      <p style={{ color: payload[0].payload.fill }}>
-        Merchants: {formatNum(payload[0].value)}
-      </p>
-    </div>
-  );
-}
-
-function RevenueTooltip({ active, payload, label }: any) {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="bg-card border border-border rounded-lg px-3 py-2 shadow-lg text-xs">
-      <p className="font-semibold mb-1">{label}</p>
-      {payload.map((p: any) => (
-        <p key={p.name} style={{ color: p.color }}>
-          {p.name}: {formatCurrency(p.value)}
-        </p>
-      ))}
-    </div>
-  );
-}
-
-// ── Main page ─────────────────────────────────────────────────────────────────
+const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export default function Billing() {
-  const { isAuthenticated } = useAuth();
-
   const { data: stats } = useQuery({
     queryKey: ["dashboard", "stats"],
     queryFn: getDashboardStats,
-    enabled: isAuthenticated,
   });
 
-  // Fetch all merchants to compute plan distribution (up to 200)
+  // One page of merchants is enough to shape the distribution and keeps the
+  // request honest: the card says how many merchants it counted.
   const { data: merchantData } = useQuery({
     queryKey: ["merchants", "all-for-billing"],
     queryFn: () => getMerchants({ limit: 200 }),
-    enabled: isAuthenticated,
   });
 
-  // Compute plan distribution
-  const planCounts = (merchantData?.merchants ?? []).reduce<Record<string, number>>(
-    (acc, m) => {
-      const plan = m.plan || "free";
-      acc[plan] = (acc[plan] || 0) + 1;
-      return acc;
+  const { data: walletSettings } = useQuery({
+    queryKey: ["wallet", "settings"],
+    queryFn: getWalletSettings,
+  });
+
+  const merchants = merchantData?.merchants ?? [];
+  const sampled = merchants.length;
+  const total = merchantData?.total ?? 0;
+
+  const byPlan = merchants.reduce<Record<string, PlanRow>>((acc, m) => {
+    const plan = m.plan || "free";
+    const row = acc[plan] ?? { plan, merchants: 0, revenue: 0 };
+    row.merchants += 1;
+    row.revenue += m.totalRevenue ?? 0;
+    acc[plan] = row;
+    return acc;
+  }, {});
+
+  const planRows = Object.values(byPlan).sort((a, b) => b.revenue - a.revenue);
+
+  const commissionBps = walletSettings?.commission_bps_default ?? null;
+  const grossRevenue = stats?.totalRevenue ?? 0;
+  // Only pay-as-you-go revenue carries the commission; applying it to gross
+  // would overstate platform earnings by the whole subscription base.
+  const paygRevenue = byPlan.payg?.revenue ?? 0;
+  const commissionEarned =
+    commissionBps != null ? Math.round((paygRevenue * commissionBps) / 10_000) : null;
+
+  const columns: DataTableColumn<PlanRow>[] = [
+    { key: "plan", header: "Plan", render: (r) => capitalise(r.plan) },
+    {
+      key: "merchants",
+      header: "Merchants",
+      align: "end",
+      mono: true,
+      render: (r) => formatNumber(r.merchants),
     },
-    {},
-  );
-
-  const planPieData = Object.entries(planCounts).map(([plan, count]) => ({
-    name: capitalise(plan),
-    value: count,
-    fill: PLAN_COLORS[plan] ?? "#6b7280",
-  }));
-
-  // Revenue by plan (sum of totalRevenue for merchants on each plan, in cents)
-  const revenueByPlan = (merchantData?.merchants ?? []).reduce<Record<string, number>>(
-    (acc, m) => {
-      const plan = m.plan || "free";
-      acc[plan] = (acc[plan] || 0) + (m.totalRevenue ?? 0);
-      return acc;
+    {
+      key: "revenue",
+      header: "Revenue",
+      align: "end",
+      mono: true,
+      render: (r) => formatMoney(r.revenue),
     },
-    {},
-  );
-
-  const revenueBarData = Object.entries(revenueByPlan)
-    .filter(([, v]) => v > 0)
-    .sort(([, a], [, b]) => b - a)
-    .map(([plan, revenue]) => ({ plan: capitalise(plan), revenue }));
-
-  const totalRevenue = stats?.totalRevenue ?? 0;
-  const platformEarnings = Math.round(totalRevenue * (PLATFORM_FEE_PCT / 100));
+    {
+      key: "avg",
+      header: "Average per merchant",
+      align: "end",
+      mono: true,
+      render: (r) => formatMoney(r.merchants ? Math.round(r.revenue / r.merchants) : 0),
+    },
+  ];
 
   return (
-    <DashboardLayout title="Billing" subtitle="Platform revenue, fees, and merchant plans">
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatsCard
-          title="Gross Revenue"
-          value={formatCurrency(totalRevenue)}
-          change={stats?.revenueChange}
-          changeLabel="vs last month"
-          icon={DollarSign}
-          iconBg="bg-emerald-50"
-          iconColor="text-emerald-600"
+    <DashboardLayout
+      title="Billing"
+      subtitle="Subscription revenue, pay-as-you-go commission and plan mix."
+    >
+      {sampled < total ? (
+        <Banner tone="info" icon="info" title="This page counts a sample">
+          Plan distribution and revenue-by-plan are computed from the{" "}
+          {formatNumber(sampled)} most recent merchants of {formatNumber(total)}. The
+          metric tiles above are platform-wide.
+        </Banner>
+      ) : null}
+
+      <div className="ak-metrics ak-metrics--4">
+        <MetricCard
+          label="MRR"
+          value={formatMoneyShort(stats?.mrr.total)}
+          note={`${formatNumber(stats?.mrr.subscriberCount)} subscribers`}
+          icon="banknote"
         />
-        <StatsCard
-          title="Platform Earnings"
-          value={formatCurrency(platformEarnings)}
-          change={stats?.revenueChange}
-          changeLabel="vs last month"
-          icon={TrendingUp}
-          iconBg="bg-blue-50"
-          iconColor="text-blue-600"
+        <MetricCard
+          label="Gross merchant revenue"
+          value={formatMoneyShort(grossRevenue)}
+          delta={formatDelta(stats?.revenueChange)}
+          note="paid orders, all time"
+          icon="creditCard"
         />
-        <StatsCard
-          title="Active Merchants"
-          value={formatNum(stats?.activeMerchants ?? 0)}
-          change={stats?.merchantsChange}
-          changeLabel="vs last month"
-          icon={Building2}
-          iconBg="bg-purple-50"
-          iconColor="text-purple-600"
+        <MetricCard
+          label="Pay-as-you-go commission"
+          value={commissionEarned != null ? formatMoneyShort(commissionEarned) : "—"}
+          note={
+            commissionBps != null
+              ? `${commissionBps / 100}% of ${formatMoneyShort(paygRevenue)}`
+              : "rate not configured"
+          }
+          icon="trendingUp"
         />
-        <StatsCard
-          title="Platform Fee"
-          value={`${PLATFORM_FEE_PCT}%`}
-          icon={CreditCard}
-          iconBg="bg-amber-50"
-          iconColor="text-amber-600"
+        <MetricCard
+          label="Active merchants"
+          value={formatNumber(stats?.activeMerchants)}
+          delta={formatDelta(stats?.merchantsChange)}
+          note="vs last month"
+          icon="building"
         />
       </div>
 
-      {/* Plan Distribution + Revenue by Plan */}
-      <div className="grid lg:grid-cols-2 gap-6 mb-6">
-        {/* Plan pie */}
-        <div className="dashboard-card">
-          <div className="mb-4">
-            <h3 className="text-sm font-semibold">Merchant Plan Distribution</h3>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {formatNum(merchantData?.total ?? 0)} total merchants
-            </p>
-          </div>
-          {planPieData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={220}>
-              <PieChart>
-                <Pie
-                  data={planPieData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={55}
-                  outerRadius={80}
-                  paddingAngle={3}
-                  dataKey="value"
-                >
-                  {planPieData.map((entry, i) => (
-                    <Cell key={i} fill={entry.fill} />
-                  ))}
-                </Pie>
-                <Legend
-                  formatter={(value) => (
-                    <span style={{ fontSize: 11, color: "hsl(var(--foreground))" }}>
-                      {value}
-                    </span>
-                  )}
-                />
-                <Tooltip content={<PlanTooltip />} />
-              </PieChart>
-            </ResponsiveContainer>
+      <div className="ak-2col">
+        <Card title="Merchants per plan" subtitle={`${formatNumber(sampled)} sampled`}>
+          {planRows.length ? (
+            <BarChart
+              data={planRows.map((r) => ({ label: capitalise(r.plan), value: r.merchants }))}
+              height={200}
+              label="Merchant count per subscription plan"
+              formatValue={formatCompact}
+            />
           ) : (
-            <div className="flex items-center justify-center h-[220px] text-muted-foreground text-sm">
-              No plan data
-            </div>
+            <EmptyState kind="empty" title="No plan data" body="No merchants to group." />
           )}
-        </div>
+        </Card>
 
-        {/* Revenue by plan bar */}
-        <div className="dashboard-card">
-          <div className="mb-4">
-            <h3 className="text-sm font-semibold">Revenue by Plan</h3>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Total merchant revenue per subscription tier
-            </p>
-          </div>
-          {revenueBarData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={revenueBarData} barSize={36}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis
-                  dataKey="plan"
-                  tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
-                  axisLine={false}
-                  tickLine={false}
-                  tickFormatter={(v) => formatCurrency(v)}
-                />
-                <Tooltip content={<RevenueTooltip />} />
-                <Bar
-                  dataKey="revenue"
-                  name="Revenue"
-                  radius={[6, 6, 0, 0]}
-                >
-                  {revenueBarData.map((entry, i) => (
-                    <Cell
-                      key={i}
-                      fill={PLAN_COLORS[entry.plan.toLowerCase()] ?? "#6b7280"}
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+        <Card title="Revenue per plan" subtitle="EGP, paid orders">
+          {planRows.some((r) => r.revenue > 0) ? (
+            <BarChart
+              data={planRows.map((r) => ({
+                label: capitalise(r.plan),
+                value: Math.round(r.revenue / 100),
+              }))}
+              height={200}
+              color="var(--viz-2)"
+              label="Merchant revenue per subscription plan, in EGP"
+              formatValue={formatCompact}
+            />
           ) : (
-            <div className="flex items-center justify-center h-[220px] text-muted-foreground text-sm">
-              No revenue data
-            </div>
+            <EmptyState
+              kind="empty"
+              title="No revenue yet"
+              body="No paid orders in the sampled merchants."
+            />
           )}
-        </div>
+        </Card>
       </div>
 
-      {/* Fee Breakdown + Payment Providers */}
-      <div className="grid lg:grid-cols-2 gap-6">
-        {/* Fee breakdown */}
-        <div className="dashboard-card">
-          <div className="flex items-center gap-2 mb-4">
-            <DollarSign className="w-4 h-4 text-muted-foreground" />
-            <h3 className="text-sm font-semibold">Platform Fee Breakdown</h3>
-          </div>
-          <div className="space-y-3">
-            <div className="flex justify-between items-center py-2 border-b border-border/50">
-              <span className="text-sm text-muted-foreground">Gross Revenue (GMV)</span>
-              <span className="text-sm font-semibold">{formatCurrency(totalRevenue)}</span>
-            </div>
-            <div className="flex justify-between items-center py-2 border-b border-border/50">
-              <span className="text-sm text-muted-foreground">
-                Platform Fee ({PLATFORM_FEE_PCT}%)
-              </span>
-              <span className="text-sm font-semibold text-emerald-600">
-                {formatCurrency(platformEarnings)}
-              </span>
-            </div>
-            <div className="flex justify-between items-center py-2 border-b border-border/50">
-              <span className="text-sm text-muted-foreground">Merchant Payout</span>
-              <span className="text-sm font-semibold">
-                {formatCurrency(totalRevenue - platformEarnings)}
-              </span>
-            </div>
-            <div className="flex justify-between items-center py-2">
-              <span className="text-sm text-muted-foreground">Avg. Revenue / Merchant</span>
-              <span className="text-sm font-semibold">
-                {stats?.activeMerchants
-                  ? formatCurrency(Math.round(totalRevenue / stats.activeMerchants))
-                  : "—"}
-              </span>
-            </div>
-          </div>
-        </div>
+      <Card title="Plan breakdown" subtitle="Sampled merchants" flush>
+        <DataTable
+          columns={columns}
+          rows={planRows}
+          rowKey={(r) => r.plan}
+          dense
+          caption="Merchants and revenue per plan"
+          empty={<EmptyState kind="empty" title="No plans to show" />}
+        />
+      </Card>
 
-        {/* Payment providers */}
-        <div className="dashboard-card">
-          <div className="flex items-center gap-2 mb-4">
-            <CreditCard className="w-4 h-4 text-muted-foreground" />
-            <h3 className="text-sm font-semibold">Payment Providers</h3>
-          </div>
-          <div className="space-y-3">
-            {PAYMENT_PROVIDERS.map((provider) => (
-              <div
-                key={provider.name}
-                className="flex items-center justify-between py-2 border-b border-border/50 last:border-0"
-              >
-                <div className="flex items-center gap-3">
-                  {provider.status === "operational" ? (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                  ) : (
-                    <AlertCircle className="w-4 h-4 text-rose-500" />
-                  )}
-                  <span className="text-sm font-medium">{provider.name}</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-muted-foreground">{provider.latency}</span>
-                  <Badge
-                    className={
-                      provider.status === "operational"
-                        ? "bg-emerald-50 text-emerald-700"
-                        : "bg-rose-50 text-rose-700"
-                    }
-                  >
-                    {provider.status}
-                  </Badge>
-                </div>
-              </div>
-            ))}
-          </div>
-          <p className="text-xs text-muted-foreground mt-4">
-            Provider status is indicative. Check provider dashboards for real-time status.
-          </p>
+      <Card title="Subscription revenue" subtitle="Monthly recurring">
+        <div className="ak-stack">
+          {[
+            { label: "Starter, monthly", value: stats?.mrr.starterMonthly },
+            { label: "Starter, annual (monthly equivalent)", value: stats?.mrr.starterAnnual },
+            { label: "Pro, monthly", value: stats?.mrr.proMonthly },
+            { label: "Pro, annual (monthly equivalent)", value: stats?.mrr.proAnnual },
+            { label: "Total MRR", value: stats?.mrr.total },
+          ].map((row) => (
+            <div key={row.label} className="ak-row-line">
+              <span style={{ fontSize: "var(--fs-app-sm)" }}>{row.label}</span>
+              <span className="numu-mono">{formatMoney(row.value)}</span>
+            </div>
+          ))}
         </div>
-      </div>
+      </Card>
     </DashboardLayout>
   );
 }
