@@ -1,767 +1,655 @@
 /**
- * Merchants Page - NUMU Admin Dashboard
+ * Merchants — the list pattern.
  *
- * Features:
- * - List all merchants with search and filters
- * - View merchant details
- * - Update merchant status (active/pending_approval/suspended/inactive)
- * - View merchant analytics
+ * Saved views, scoped search, facet filters, a dense sortable table and
+ * pagination in the card footer. Row click opens the merchant; the action
+ * column swallows its own clicks so the two never fight.
+ *
+ * Two behaviours changed with the redesign, both because the design system
+ * requires it. Suspending a store is now gated behind a typed confirmation
+ * that names the store and lists what suspension actually does — it used to
+ * be a plain dropdown two clicks from the row. And signing in as a merchant
+ * states, before it happens, that every action is attributed to the operator.
  */
 
-import { useAuth } from "@/_core/hooks/useAuth";
-import { useLocation } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
-import { DashboardLayoutSkeleton } from "@/components/DashboardLayoutSkeleton";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
+  Badge,
+  Button,
+  Card,
+  Checkbox,
+  ConfirmDialog,
+  DataTable,
   Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import {
+  EmptyState,
+  FilterBar,
+  FormField,
+  IconButton,
+  Input,
+  MetricCard,
+  Pagination,
   Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  StatusBadge,
+  type DataTableColumn,
+} from "@/ds";
+import { formatDate, formatMoneyShort, formatNumber } from "@/lib/format";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { getLoginUrl } from "@/const";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  getMerchants,
   getMerchantStats,
-  updateMerchantStatus,
+  getMerchants,
   impersonateMerchant,
+  setFounderCohort,
   setInstapayOcrProvider,
   toggleMerchantInternal,
-  setFounderCohort,
+  updateMerchantStatus,
   type InstapayOcrProvider,
   type Merchant,
 } from "@/services/merchantService";
-import {
-  Building2,
-  ChevronLeft,
-  ChevronRight,
-  Clock,
-  ExternalLink,
-  FlaskConical,
-  LogIn,
-  Star,
-  MoreHorizontal,
-  ScanText,
-  Search,
-  ShoppingCart,
-  Users,
-} from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
+import { useLocation } from "wouter";
 
-const statusColors: Record<string, string> = {
-  active: "bg-emerald-100 text-emerald-700",
-  pending_approval: "bg-amber-100 text-amber-700",
-  suspended: "bg-red-100 text-red-700",
-  inactive: "bg-gray-100 text-gray-700",
-};
+const STATUS_BADGE = {
+  active: "active",
+  pending_approval: "pending",
+  suspended: "suspended",
+  inactive: "archived",
+} as const;
 
-const statusLabels: Record<string, string> = {
-  active: "Active",
-  pending_approval: "Pending",
-  suspended: "Suspended",
-  inactive: "Inactive",
-};
+const VIEWS = [
+  { id: "all", label: "All merchants" },
+  { id: "active", label: "Active" },
+  { id: "pending_approval", label: "Awaiting approval" },
+  { id: "suspended", label: "Suspended" },
+  { id: "inactive", label: "Inactive" },
+];
 
-const planColors: Record<string, string> = {
-  free: "bg-gray-100 text-gray-700",
-  demo: "bg-orange-100 text-orange-700",
-  basic: "bg-blue-100 text-blue-700",
-  starter: "bg-blue-100 text-blue-700",
-  pro: "bg-purple-100 text-purple-700",
-  enterprise: "bg-indigo-100 text-indigo-700",
-};
+const PAGE_SIZE = 20;
 
 export default function Merchants() {
-  const { user, loading, isAuthenticated } = useAuth();
   const [, navigate] = useLocation();
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [page, setPage] = useState(0);
-  const [selectedMerchant, setSelectedMerchant] = useState<any>(null);
-  const [showStatusDialog, setShowStatusDialog] = useState(false);
-  const [newStatus, setNewStatus] = useState<string>("");
-
-  // Phase C — InstaPay OCR provider routing. Separate dialog from the
-  // status one because the privacy-disclosure checkbox shouldn't gate
-  // unrelated actions like status changes.
-  const [showOcrDialog, setShowOcrDialog] = useState(false);
-  const [ocrProvider, setOcrProvider] = useState<InstapayOcrProvider>("none");
-  const [ocrPrivacyAck, setOcrPrivacyAck] = useState(false);
-
-  const limit = 10;
-
   const queryClient = useQueryClient();
 
+  const [search, setSearch] = useState("");
+  const [view, setView] = useState("all");
+  const [page, setPage] = useState(1);
+
+  const [suspending, setSuspending] = useState<Merchant | null>(null);
+  const [impersonating, setImpersonating] = useState<Merchant | null>(null);
+  const [ocrTarget, setOcrTarget] = useState<Merchant | null>(null);
+  const [ocrProvider, setOcrProvider] = useState<InstapayOcrProvider>("none");
+  const [ocrPrivacyAck, setOcrPrivacyAck] = useState(false);
+  const [founderTarget, setFounderTarget] = useState<Merchant | null>(null);
+  const [founderYear, setFounderYear] = useState("");
+
   const queryParams = {
-    limit,
-    offset: page * limit,
-    status: statusFilter !== "all" ? statusFilter : undefined,
+    limit: PAGE_SIZE,
+    offset: (page - 1) * PAGE_SIZE,
+    status: view !== "all" ? view : undefined,
     search: search || undefined,
   };
 
-  // Fetch merchants
   const { data, isLoading } = useQuery({
     queryKey: ["merchants", "list", queryParams],
     queryFn: () => getMerchants(queryParams),
-    enabled: isAuthenticated,
   });
-
-  // Fetch merchant stats
   const { data: stats } = useQuery({
     queryKey: ["merchants", "stats"],
     queryFn: getMerchantStats,
-    enabled: isAuthenticated,
   });
 
-  // Update status mutation
-  const updateStatusMutation = useMutation({
-    mutationFn: ({ merchantId, status }: { merchantId: string; status: string }) =>
-      updateMerchantStatus(merchantId, status),
-    onSuccess: () => {
-      toast.success("Merchant status updated successfully");
-      setShowStatusDialog(false);
-      setSelectedMerchant(null);
-      queryClient.invalidateQueries({ queryKey: ["merchants"] });
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ["merchants"] });
+    queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+  };
+
+  const statusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: string }) =>
+      updateMerchantStatus(id, status),
+    onSuccess: (_d, v) => {
+      toast.success(
+        v.status === "suspended" ? "Store suspended" : "Store status updated",
+        { description: `${v.id} · recorded in the audit log` },
+      );
+      setSuspending(null);
+      invalidate();
     },
-    onError: () => {
-      toast.error("Failed to update merchant status");
-    },
+    onError: (e) => toast.error((e as Error).message || "Status change failed"),
   });
 
-  // Impersonate mutation — mints merchant-hub cookies for the store's owner
-  // and opens the hub in a new tab logged in as them.
   const impersonateMutation = useMutation({
-    mutationFn: (merchantId: string) => impersonateMerchant(merchantId),
-    onSuccess: (data) => {
-      toast.success(`Opening hub as ${data.owner_email}`);
-      window.open(data.dashboard_url, "_blank", "noopener,noreferrer");
+    mutationFn: (id: string) => impersonateMerchant(id),
+    onSuccess: (d) => {
+      toast.success("Session started", { description: `Signed in as ${d.owner_email}` });
+      setImpersonating(null);
+      window.open(d.dashboard_url, "_blank", "noopener,noreferrer");
     },
-    onError: (err) => {
-      toast.error((err as Error).message || "Failed to impersonate");
-    },
+    onError: (e) => toast.error((e as Error).message || "Could not start the session"),
   });
 
-  const ocrProviderMutation = useMutation({
-    mutationFn: ({
-      merchantId,
-      provider,
-    }: {
-      merchantId: string;
-      provider: InstapayOcrProvider;
-    }) => setInstapayOcrProvider(merchantId, provider),
-    onSuccess: () => {
-      toast.success("InstaPay OCR provider updated");
-      setShowOcrDialog(false);
-      setOcrPrivacyAck(false);
-      setSelectedMerchant(null);
-      queryClient.invalidateQueries({ queryKey: ["merchants"] });
+  const internalMutation = useMutation({
+    mutationFn: ({ id, isInternal }: { id: string; isInternal: boolean }) =>
+      toggleMerchantInternal(id, isInternal),
+    onSuccess: (_d, v) => {
+      toast.success(
+        v.isInternal
+          ? "Marked internal — excluded from every platform aggregate"
+          : "Marked real — included in platform aggregates",
+      );
+      invalidate();
     },
-    onError: (err) => {
-      toast.error((err as Error).message || "Failed to update OCR provider");
-    },
+    onError: () => toast.error("Could not change the internal flag"),
   });
 
   // Founder-merchant badge. Not a plain toggle: granting it needs a COHORT
   // YEAR, and the year has to be the merchant's real join year or the badge
-  // on their storefront becomes a false claim. So the dialog below opens
-  // pre-filled from their signup date — the honest value is the default one.
-  const [founderTarget, setFounderTarget] = useState<Merchant | null>(null);
-  const [founderYear, setFounderYear] = useState("");
-
+  // on their storefront becomes a false claim. The dialog opens pre-filled
+  // from their signup date, so the honest value is the default one.
   const founderMutation = useMutation({
-    mutationFn: ({ merchantId, cohort }: { merchantId: string; cohort: string | null }) =>
-      setFounderCohort(merchantId, cohort),
-    onSuccess: (_data, variables) => {
+    mutationFn: ({ id, cohort }: { id: string; cohort: string | null }) =>
+      setFounderCohort(id, cohort),
+    onSuccess: (_d, v) => {
       toast.success(
-        variables.cohort
-          ? `Founder badge granted — class of ${variables.cohort}`
-          : "Founder badge removed",
+        v.cohort ? `Founder badge granted — class of ${v.cohort}` : "Founder badge removed",
       );
       setFounderTarget(null);
-      queryClient.invalidateQueries({ queryKey: ["merchants"] });
+      invalidate();
     },
-    onError: () => {
-      toast.error("Couldn't update founder status");
-    },
+    onError: () => toast.error("Could not update founder status"),
   });
 
-  const openFounderDialog = (merchant: Merchant) => {
-    setFounderTarget(merchant);
+  const openFounderDialog = (m: Merchant) => {
+    setFounderTarget(m);
     // Their actual signup year, so the default is the true one.
-    setFounderYear(
-      merchant.founderCohort ?? String(merchant.createdAt.getFullYear()),
-    );
+    setFounderYear(m.founderCohort ?? String(m.createdAt.getFullYear()));
   };
 
-  // Toggle internal (test/sandbox) flag on the merchant's tenant
-  const toggleInternalMutation = useMutation({
-    mutationFn: ({ merchantId, isInternal }: { merchantId: string; isInternal: boolean }) =>
-      toggleMerchantInternal(merchantId, isInternal),
-    onSuccess: (_data, variables) => {
-      toast.success(
-        variables.isInternal
-          ? "Merchant marked as internal — excluded from analytics"
-          : "Merchant marked as real — included in analytics",
-      );
-      queryClient.invalidateQueries({ queryKey: ["merchants"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+  const ocrMutation = useMutation({
+    mutationFn: ({ id, provider }: { id: string; provider: InstapayOcrProvider }) =>
+      setInstapayOcrProvider(id, provider),
+    onSuccess: () => {
+      toast.success("InstaPay OCR provider updated");
+      setOcrTarget(null);
+      setOcrPrivacyAck(false);
+      invalidate();
     },
-    onError: () => {
-      toast.error("Failed to update internal flag");
-    },
+    onError: (e) => toast.error((e as Error).message || "Could not set the provider"),
   });
 
-  const handleOcrSubmit = () => {
-    if (!selectedMerchant) return;
-    ocrProviderMutation.mutate({
-      merchantId: selectedMerchant.merchantId,
-      provider: ocrProvider,
-    });
-  };
+  // Public HuggingFace Spaces process the customer's payment screenshot on
+  // infrastructure NUMU does not control, so that choice carries a
+  // disclosure the operator has to accept.
+  const requiresPrivacyAck = ocrProvider === "deepseek_hf" || ocrProvider === "glm_hf";
 
-  // Privacy disclosure required when the admin selects an HF
-  // provider — those Spaces are public infrastructure and the
-  // customer's payment screenshot would be processed there.
-  const requiresPrivacyAck =
-    ocrProvider === "deepseek_hf" || ocrProvider === "glm_hf";
-  const ocrSubmitDisabled =
-    ocrProviderMutation.isPending ||
-    (requiresPrivacyAck && !ocrPrivacyAck);
-
-  // Show loading skeleton while checking auth
-  if (loading) {
-    return <DashboardLayoutSkeleton />;
-  }
-
-  // Redirect to login if not authenticated
-  if (!isAuthenticated) {
-    const loginUrl = getLoginUrl();
-    if (loginUrl) {
-      window.location.href = loginUrl;
-      return <DashboardLayoutSkeleton />;
-    }
-    // No OAuth configured (local dev) — render page with empty data
-  }
+  const columns: DataTableColumn<Merchant>[] = [
+    {
+      key: "name",
+      header: "Merchant",
+      render: (m) => (
+        <div>
+          <div className="ntb__primary ak-cell-line">
+            <span>{m.name}</span>
+            {m.isInternal ? <Badge tone="warning" icon="flag" square>Internal</Badge> : null}
+            {m.founderCohort ? (
+              <Badge
+                tone="warning"
+                icon="star"
+                square
+                title={`Founder merchant — class of ${m.founderCohort}`}
+              >
+                Founder {m.founderCohort}
+              </Badge>
+            ) : null}
+          </div>
+          <div className="ntb__sub numu-email">{m.email}</div>
+        </div>
+      ),
+    },
+    {
+      key: "domain",
+      header: "Domain",
+      mono: true,
+      render: (m) =>
+        m.domain ? (
+          <a
+            href={`https://${m.domain}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {m.domain}
+          </a>
+        ) : (
+          "—"
+        ),
+    },
+    {
+      key: "status",
+      header: "Status",
+      render: (m) => <StatusBadge status={STATUS_BADGE[m.status] ?? "archived"} />,
+    },
+    {
+      key: "plan",
+      header: "Plan",
+      render: (m) => (
+        <div className="ak-cell-line">
+          <Badge tone="neutral" square>{m.plan}</Badge>
+          {/* A trial without its remaining days answers "are they paying?"
+              and not "when do I need to call them?", which is the question
+              this screen exists for. Under a week reads as a warning. */}
+          {m.trialDaysRemaining !== null ? (
+            <Badge tone={m.trialDaysRemaining <= 7 ? "warning" : "info"} square>
+              {m.trialDaysRemaining === 0
+                ? "ends today"
+                : `${m.trialDaysRemaining}d left`}
+            </Badge>
+          ) : null}
+        </div>
+      ),
+    },
+    {
+      key: "totalRevenue",
+      header: "Revenue",
+      align: "end",
+      mono: true,
+      render: (m) => formatMoneyShort(m.totalRevenue),
+    },
+    {
+      key: "totalOrders",
+      header: "Orders",
+      align: "end",
+      mono: true,
+      render: (m) => formatNumber(m.totalOrders),
+    },
+    {
+      key: "createdAt",
+      header: "Joined",
+      mono: true,
+      render: (m) => formatDate(m.createdAt),
+    },
+    {
+      key: "actions",
+      header: "",
+      width: 150,
+      render: (m) => (
+        <div className="ak-rowactions" onClick={(e) => e.stopPropagation()}>
+          <IconButton
+            icon="flag"
+            label={m.isInternal ? "Mark as a real merchant" : "Mark as internal"}
+            size="sm"
+            disabled={internalMutation.isPending}
+            onClick={() =>
+              internalMutation.mutate({ id: m.merchantId, isInternal: !m.isInternal })
+            }
+          />
+          <IconButton
+            icon="star"
+            label={
+              m.founderCohort
+                ? `Founder merchant (${m.founderCohort}) — change or remove`
+                : "Mark as a founder merchant"
+            }
+            size="sm"
+            onClick={() => openFounderDialog(m)}
+          />
+          <IconButton
+            icon="eye"
+            label="InstaPay OCR provider"
+            size="sm"
+            onClick={() => {
+              setOcrTarget(m);
+              // The list endpoint does not carry the current provider, so
+              // the dialog opens neutral and the operator picks afresh.
+              setOcrProvider("none");
+              setOcrPrivacyAck(false);
+            }}
+          />
+          <IconButton
+            icon="logOut"
+            label="View the hub as this merchant"
+            size="sm"
+            disabled={impersonateMutation.isPending}
+            onClick={() => setImpersonating(m)}
+          />
+          {m.status === "suspended" ? (
+            <IconButton
+              icon="playCircle"
+              label="Reinstate this store"
+              size="sm"
+              onClick={() =>
+                statusMutation.mutate({ id: m.merchantId, status: "active" })
+              }
+            />
+          ) : (
+            <IconButton
+              icon="slash"
+              label="Suspend this store"
+              size="sm"
+              onClick={() => setSuspending(m)}
+            />
+          )}
+        </div>
+      ),
+    },
+  ];
 
   const merchants = data?.merchants ?? [];
-  const total = data?.total ?? 0;
-  const totalPages = Math.ceil(total / limit);
-
-  const formatCurrency = (cents: number) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      minimumFractionDigits: 0,
-    }).format(cents / 100);
-  };
-
-  const handleStatusChange = () => {
-    if (selectedMerchant && newStatus) {
-      updateStatusMutation.mutate({
-        merchantId: selectedMerchant.merchantId,
-        status: newStatus as any,
-      });
-    }
-  };
 
   return (
     <DashboardLayout
       title="Merchants"
-      subtitle="Manage all merchants on the platform"
+      subtitle="Every store on the platform, including internal ones."
     >
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div className="dashboard-card flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center">
-            <Building2 className="w-6 h-6 text-blue-600" />
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground">Total Merchants</p>
-            <p className="text-2xl font-bold">{stats?.total ?? 0}</p>
-          </div>
-        </div>
-        <div className="dashboard-card flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center">
-            <Users className="w-6 h-6 text-emerald-600" />
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground">Active</p>
-            <p className="text-2xl font-bold text-emerald-600">{stats?.active ?? 0}</p>
-          </div>
-        </div>
-        <div className="dashboard-card flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center">
-            <Clock className="w-6 h-6 text-amber-600" />
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground">Pending Approval</p>
-            <p className="text-2xl font-bold text-amber-600">{stats?.pending_approval ?? 0}</p>
-          </div>
-        </div>
-        <div className="dashboard-card flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-red-50 flex items-center justify-center">
-            <ShoppingCart className="w-6 h-6 text-red-600" />
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground">Suspended</p>
-            <p className="text-2xl font-bold text-red-600">{stats?.suspended ?? 0}</p>
-          </div>
-        </div>
+      <div className="ak-metrics ak-metrics--4">
+        <MetricCard
+          label="Total"
+          value={formatNumber(stats?.total)}
+          icon="building"
+          flat
+          onClick={() => setView("all")}
+        />
+        <MetricCard
+          label="Active"
+          value={formatNumber(stats?.active)}
+          icon="check"
+          flat
+          onClick={() => setView("active")}
+        />
+        <MetricCard
+          label="Awaiting approval"
+          value={formatNumber(stats?.pending_approval)}
+          icon="clock"
+          flat
+          alert={Boolean(stats?.pending_approval)}
+          onClick={() => setView("pending_approval")}
+        />
+        <MetricCard
+          label="Suspended"
+          value={formatNumber(stats?.suspended)}
+          icon="slash"
+          flat
+          onClick={() => setView("suspended")}
+        />
       </div>
 
-      {/* Filters */}
-      <div className="dashboard-card mb-6">
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="Search merchants by name, email, or subdomain..."
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(0);
-              }}
-              className="pl-10"
+      <Card flush>
+        <FilterBar
+          savedViews={VIEWS}
+          activeView={view}
+          onViewChange={(id) => {
+            setView(id);
+            setPage(1);
+          }}
+          search={search}
+          onSearchChange={(v) => {
+            setSearch(v);
+            setPage(1);
+          }}
+          searchPlaceholder="Name, email or subdomain"
+          actions={
+            <Button
+              variant="subtle"
+              size="sm"
+              icon="download"
+              onClick={() => exportCsv(merchants)}
+            >
+              Export CSV
+            </Button>
+          }
+        />
+        <DataTable
+          columns={columns}
+          rows={merchants}
+          rowKey={(m) => m.merchantId}
+          loading={isLoading}
+          caption="Merchants on the platform"
+          onRowClick={(m) => navigate(`/merchants/${m.merchantId}`)}
+          isFlagged={(m) => m.status === "suspended"}
+          empty={
+            <EmptyState
+              kind={search || view !== "all" ? "noResults" : "empty"}
+              title={search || view !== "all" ? "Nothing matches" : "No merchants yet"}
+              body={
+                search || view !== "all"
+                  ? "Widen the search or switch to another saved view."
+                  : "A merchant appears here as soon as their first store is created."
+              }
+              action={
+                search || view !== "all" ? (
+                  <Button
+                    size="sm"
+                    variant="subtle"
+                    onClick={() => {
+                      setSearch("");
+                      setView("all");
+                    }}
+                  >
+                    Clear filters
+                  </Button>
+                ) : undefined
+              }
             />
-          </div>
-          <Select
-            value={statusFilter}
-            onValueChange={(value) => {
-              setStatusFilter(value);
-              setPage(0);
-            }}
-          >
-            <SelectTrigger className="w-48">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="pending_approval">Pending Approval</SelectItem>
-              <SelectItem value="suspended">Suspended</SelectItem>
-              <SelectItem value="inactive">Inactive</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+          }
+        />
+        <Pagination
+          page={page}
+          pageSize={PAGE_SIZE}
+          total={data?.total ?? 0}
+          onPageChange={setPage}
+        />
+      </Card>
 
-      {/* Merchants Table */}
-      <div className="dashboard-card">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Merchant</TableHead>
-              <TableHead>Domain</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Plan</TableHead>
-              <TableHead>Revenue</TableHead>
-              <TableHead>Orders</TableHead>
-              <TableHead>Joined</TableHead>
-              <TableHead className="w-10"></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              <TableRow>
-                <TableCell colSpan={8} className="text-center py-8">
-                  Loading merchants...
-                </TableCell>
-              </TableRow>
-            ) : merchants.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                  No merchants found
-                </TableCell>
-              </TableRow>
-            ) : (
-              merchants.map((merchant) => (
-                <TableRow
-                  key={merchant.id}
-                  className="cursor-pointer"
-                  onClick={() => navigate(`/merchants/${merchant.merchantId}`)}
-                >
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary/20 to-primary/40 flex items-center justify-center">
-                        <span className="text-sm font-semibold text-primary">
-                          {merchant.name.substring(0, 2).toUpperCase()}
-                        </span>
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="font-medium">{merchant.name}</p>
-                          {merchant.isInternal && (
-                            <Badge className="bg-orange-100 text-orange-700 text-[10px] px-1.5 py-0">
-                              Internal
-                            </Badge>
-                          )}
-                          {merchant.founderCohort && (
-                            <Badge
-                              className="bg-amber-100 text-amber-700 text-[10px] px-1.5 py-0"
-                              title={`Founder merchant — class of ${merchant.founderCohort}`}
-                            >
-                              Founder {merchant.founderCohort}
-                            </Badge>
-                          )}
-                        </div>
-                        <p className="text-sm text-muted-foreground">{merchant.email}</p>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    {merchant.domain ? (
-                      <a
-                        href={`https://${merchant.domain}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-1 text-primary hover:underline"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {merchant.domain}
-                        <ExternalLink className="w-3 h-3" />
-                      </a>
-                    ) : (
-                      <span className="text-muted-foreground">-</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Badge className={statusColors[merchant.status] || "bg-gray-100 text-gray-700"}>
-                      {statusLabels[merchant.status] || merchant.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge className={planColors[merchant.plan]}>
-                      {merchant.plan}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="font-medium">
-                    {formatCurrency(merchant.totalRevenue ?? 0)}
-                  </TableCell>
-                  <TableCell>{merchant.totalOrders ?? 0}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {new Date(merchant.createdAt).toLocaleDateString()}
-                  </TableCell>
-                  {/* Action cell swallows clicks so row-click → detail page
-                      never fires from the buttons. */}
-                  <TableCell onClick={(e) => e.stopPropagation()}>
-                    <div className="flex items-center justify-end gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        title={merchant.isInternal ? "Mark as real merchant" : "Mark as internal (test)"}
-                        onClick={() =>
-                          toggleInternalMutation.mutate({
-                            merchantId: merchant.merchantId,
-                            isInternal: !merchant.isInternal,
-                          })
-                        }
-                        disabled={toggleInternalMutation.isPending}
-                        className={merchant.isInternal ? "text-orange-600" : ""}
-                      >
-                        <FlaskConical className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        title={
-                          merchant.founderCohort
-                            ? `Founder merchant (${merchant.founderCohort}) — click to change`
-                            : "Mark as founder merchant"
-                        }
-                        onClick={() => openFounderDialog(merchant)}
-                        className={merchant.founderCohort ? "text-amber-600" : ""}
-                      >
-                        <Star
-                          className="w-4 h-4"
-                          fill={merchant.founderCohort ? "currentColor" : "none"}
-                        />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        title="Log in as merchant"
-                        onClick={() => impersonateMutation.mutate(merchant.merchantId)}
-                        disabled={impersonateMutation.isPending}
-                      >
-                        <LogIn className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        title="InstaPay OCR provider"
-                        onClick={() => {
-                          setSelectedMerchant(merchant);
-                          // The list endpoint doesn't surface
-                          // ocr_provider today, so we open the dialog
-                          // with "none" and the admin picks afresh.
-                          // Surface it in a follow-up by extending
-                          // the Merchant type + the backend list
-                          // response.
-                          setOcrProvider("none");
-                          setOcrPrivacyAck(false);
-                          setShowOcrDialog(true);
-                        }}
-                      >
-                        <ScanText className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => {
-                          setSelectedMerchant(merchant);
-                          setNewStatus(merchant.status);
-                          setShowStatusDialog(true);
-                        }}
-                      >
-                        <MoreHorizontal className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+      <ConfirmDialog
+        open={Boolean(suspending)}
+        tone="danger"
+        title={`Suspend ${suspending?.name}?`}
+        entity={[
+          { label: "Store", value: suspending?.name ?? "" },
+          { label: "Store ID", value: suspending?.merchantId ?? "", mono: true },
+          { label: "Domain", value: suspending?.domain ?? "—", mono: true },
+        ]}
+        consequences={[
+          "The storefront stops serving shoppers immediately.",
+          `${formatNumber(suspending?.totalOrders)} orders stay visible but cannot be fulfilled.`,
+          "The merchant sees a suspension notice in the Merchant Hub.",
+          "Reinstating the store restores it exactly as it was.",
+        ]}
+        confirmPhrase={suspending?.merchantId}
+        confirmLabel="Suspend store"
+        onClose={() => setSuspending(null)}
+        onConfirm={() =>
+          suspending &&
+          statusMutation.mutate({ id: suspending.merchantId, status: "suspended" })
+        }
+      />
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between mt-4 pt-4 border-t">
-            <p className="text-sm text-muted-foreground">
-              Showing {page * limit + 1} to {Math.min((page + 1) * limit, total)} of {total} merchants
-            </p>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage((p) => Math.max(0, p - 1))}
-                disabled={page === 0}
-              >
-                <ChevronLeft className="w-4 h-4" />
-                Previous
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-                disabled={page >= totalPages - 1}
-              >
-                Next
-                <ChevronRight className="w-4 h-4" />
-              </Button>
-            </div>
-          </div>
-        )}
-      </div>
+      <ConfirmDialog
+        open={Boolean(impersonating)}
+        tone="warning"
+        title={`Open the hub as ${impersonating?.name}?`}
+        entity={[
+          { label: "Store", value: impersonating?.name ?? "" },
+          { label: "Store ID", value: impersonating?.merchantId ?? "", mono: true },
+          { label: "Owner", value: impersonating?.email ?? "", mono: true },
+        ]}
+        consequences={[
+          "You see the Merchant Hub exactly as the owner does.",
+          "Every action you take is attributed to your account, not theirs.",
+          "The hub opens in a new tab; closing it ends the session.",
+        ]}
+        confirmLabel="Start session"
+        onClose={() => setImpersonating(null)}
+        onConfirm={() =>
+          impersonating && impersonateMutation.mutate(impersonating.merchantId)
+        }
+      />
 
-      {/* Status Update Dialog */}
-      <Dialog open={showStatusDialog} onOpenChange={setShowStatusDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Update Merchant Status</DialogTitle>
-            <DialogDescription>
-              Change the status for {selectedMerchant?.name}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            <Select value={newStatus} onValueChange={setNewStatus}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="active">
-                  {selectedMerchant?.status === "pending_approval" ? "Approve (Active)" : "Active"}
-                </SelectItem>
-                <SelectItem value="suspended">Suspended</SelectItem>
-                <SelectItem value="inactive">Inactive</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowStatusDialog(false)}>
+      <Dialog
+        open={Boolean(ocrTarget)}
+        title="InstaPay OCR provider"
+        description={
+          ocrTarget
+            ? `Which engine reads ${ocrTarget.name}'s payment-proof screenshots. Merchants cannot change this themselves.`
+            : undefined
+        }
+        onClose={() => setOcrTarget(null)}
+        footer={
+          <>
+            <Button
+              variant="ghost"
+              onClick={() => setOcrTarget(null)}
+              disabled={ocrMutation.isPending}
+            >
               Cancel
             </Button>
             <Button
-              onClick={handleStatusChange}
-              disabled={updateStatusMutation.isPending}
+              loading={ocrMutation.isPending}
+              disabled={requiresPrivacyAck && !ocrPrivacyAck}
+              onClick={() =>
+                ocrTarget &&
+                ocrMutation.mutate({ id: ocrTarget.merchantId, provider: ocrProvider })
+              }
             >
-              {updateStatusMutation.isPending ? "Updating..." : "Update Status"}
+              Save provider
             </Button>
-          </DialogFooter>
-        </DialogContent>
+          </>
+        }
+      >
+        <FormField label="Provider" hint="Cost and language coverage differ per engine.">
+          <Select
+            value={ocrProvider}
+            onChange={(e) => {
+              setOcrProvider(e.target.value as InstapayOcrProvider);
+              setOcrPrivacyAck(false);
+            }}
+            options={[
+              { value: "none", label: "None — no OCR for this store" },
+              { value: "google_vision", label: "Google Vision — paid, Arabic and Latin" },
+              { value: "deepseek_hf", label: "DeepSeek-OCR — free, public Space, Latin only" },
+              { value: "glm_hf", label: "GLM-OCR — free, public Space, Latin only" },
+            ]}
+          />
+        </FormField>
+        {requiresPrivacyAck ? (
+          <div
+            style={{
+              marginTop: "var(--sp-4)",
+              padding: "var(--sp-3)",
+              borderRadius: "var(--radius-inset)",
+              background: "var(--status-warning-tint)",
+            }}
+          >
+            <Checkbox
+              checked={ocrPrivacyAck}
+              onChange={(e) => setOcrPrivacyAck(e.target.checked)}
+              label="Customer payment screenshots will be processed on a public HuggingFace Space. Confirm with the merchant before enabling this on live traffic."
+            />
+          </div>
+        ) : null}
       </Dialog>
 
-      {/* InstaPay OCR provider — admin-controlled, has cost (Vision)
-          + privacy (HF Spaces) implications, so it lives behind a
-          dedicated dialog with its own confirmation flow rather than
-          hidden inside the status dialog. */}
-      {/* Founder-merchant badge. A cohort YEAR, never a rank: a rank would
-          tell merchant #42 that 41 came before them, publishing how many
-          merchants are on the platform to every merchant — and, once the
-          badge reaches a storefront, to every shopper. */}
+      {/* Founder-merchant badge. A cohort YEAR, never a rank: a rank would tell
+          merchant #42 that 41 came before them, publishing how many merchants
+          are on the platform to every merchant — and, once the badge reaches a
+          storefront, to every shopper. */}
       <Dialog
-        open={founderTarget !== null}
-        onOpenChange={(open) => !open && setFounderTarget(null)}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Founder merchant</DialogTitle>
-            <DialogDescription>
-              {founderTarget?.name} joined in{" "}
-              {founderTarget?.createdAt.getFullYear()}. The badge shows this
-              year on their storefront, so it should be the year they actually
-              joined — not the year you are granting it.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-2">
-            <label htmlFor="founder-year" className="text-sm font-medium">
-              Cohort year
-            </label>
-            <Input
-              id="founder-year"
-              value={founderYear}
-              onChange={(e) => setFounderYear(e.target.value.replace(/\D/g, "").slice(0, 4))}
-              placeholder="2025"
-              inputMode="numeric"
-              className="font-mono"
-            />
-            <p className="text-xs text-muted-foreground">
-              Applies to the merchant, so it appears on every store they own.
-            </p>
-          </div>
-
-          <DialogFooter className="gap-2 sm:justify-between">
+        open={Boolean(founderTarget)}
+        title="Founder merchant"
+        description={
+          founderTarget
+            ? `${founderTarget.name} joined in ${founderTarget.createdAt.getFullYear()}. The badge shows this year on their storefront, so it should be the year they actually joined — not the year you are granting it.`
+            : undefined
+        }
+        width={460}
+        onClose={() => setFounderTarget(null)}
+        footer={
+          <>
             {founderTarget?.founderCohort ? (
               <Button
-                variant="ghost"
-                className="text-destructive hover:text-destructive"
+                variant="danger-outline"
                 disabled={founderMutation.isPending}
                 onClick={() =>
-                  founderMutation.mutate({
-                    merchantId: founderTarget.merchantId,
-                    cohort: null,
-                  })
+                  founderMutation.mutate({ id: founderTarget.merchantId, cohort: null })
                 }
               >
                 Remove badge
               </Button>
-            ) : (
-              <span />
-            )}
+            ) : null}
+            <Button variant="ghost" onClick={() => setFounderTarget(null)}>
+              Cancel
+            </Button>
             <Button
-              disabled={founderMutation.isPending || founderYear.length !== 4}
+              variant="primary"
+              loading={founderMutation.isPending}
+              disabled={founderYear.length !== 4}
               onClick={() =>
                 founderTarget &&
                 founderMutation.mutate({
-                  merchantId: founderTarget.merchantId,
+                  id: founderTarget.merchantId,
                   cohort: founderYear,
                 })
               }
             >
-              {founderTarget?.founderCohort ? "Update year" : "Grant badge"}
+              Grant
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={showOcrDialog} onOpenChange={setShowOcrDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>InstaPay OCR provider</DialogTitle>
-            <DialogDescription>
-              {selectedMerchant ? (
-                <>
-                  Pick the OCR engine that runs against{" "}
-                  <span className="font-medium">{selectedMerchant.name}</span>'s
-                  InstaPay payment-proof submissions. Merchants can't
-                  change this themselves; it's an operator-level call.
-                </>
-              ) : null}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4 space-y-4">
-            <Select
-              value={ocrProvider}
-              onValueChange={(v) => {
-                setOcrProvider(v as InstapayOcrProvider);
-                setOcrPrivacyAck(false);
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select provider" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">
-                  None — disable OCR for this store
-                </SelectItem>
-                <SelectItem value="google_vision">
-                  Google Vision (paid, ~$1.50/1k, strong AR + EN)
-                </SelectItem>
-                <SelectItem value="deepseek_hf">
-                  DeepSeek-OCR (free, public HF Space, Latin only)
-                </SelectItem>
-                <SelectItem value="glm_hf">
-                  GLM-OCR (free, public HF Space, Latin only)
-                </SelectItem>
-              </SelectContent>
-            </Select>
-
-            {requiresPrivacyAck ? (
-              <div className="rounded-md border border-amber-300 bg-amber-50/60 p-3">
-                <label className="flex items-start gap-2 text-xs cursor-pointer">
-                  <Checkbox
-                    checked={ocrPrivacyAck}
-                    onCheckedChange={(v) =>
-                      setOcrPrivacyAck(v === true)
-                    }
-                  />
-                  <span>
-                    Customer payment screenshots will be sent to a public
-                    HuggingFace Space for OCR. Confirm with the merchant
-                    before enabling for production traffic.
-                  </span>
-                </label>
-              </div>
-            ) : null}
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setShowOcrDialog(false)}
-              disabled={ocrProviderMutation.isPending}
-            >
-              Cancel
-            </Button>
-            <Button onClick={handleOcrSubmit} disabled={ocrSubmitDisabled}>
-              {ocrProviderMutation.isPending
-                ? "Saving..."
-                : "Save provider"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
+          </>
+        }
+      >
+        <FormField
+          label="Cohort year"
+          hint="Applies to the merchant, so it appears on every store they own."
+        >
+          <Input
+            mono
+            inputMode="numeric"
+            value={founderYear}
+            onChange={(e) => setFounderYear(e.target.value.replace(/\D/g, "").slice(0, 4))}
+            placeholder="2025"
+          />
+        </FormField>
       </Dialog>
     </DashboardLayout>
   );
+}
+
+/**
+ * Export what is on screen, not what is in the database.
+ *
+ * An operator exporting a filtered list expects the filtered list. Pulling
+ * every page server-side would silently hand them a different dataset from
+ * the one they were looking at.
+ */
+function exportCsv(rows: Merchant[]) {
+  if (!rows.length) {
+    toast.message("Nothing to export", { description: "The current view is empty." });
+    return;
+  }
+  // trial_ends_at rides along so a call list can be sorted by it in a sheet,
+  // which is what the export is for.
+  const header = ["store_id", "name", "email", "domain", "status", "plan", "trial_ends_at", "revenue_piasters", "orders", "created_at"];
+  const body = rows.map((m) =>
+    [
+      m.merchantId,
+      m.name,
+      m.email,
+      m.domain ?? "",
+      m.status,
+      m.plan,
+      m.trialEndsAt ?? "",
+      String(m.totalRevenue ?? 0),
+      String(m.totalOrders ?? 0),
+      m.createdAt.toISOString(),
+    ]
+      .map((cell) => `"${String(cell).replace(/"/g, '""')}"`)
+      .join(","),
+  );
+  const blob = new Blob([[header.join(","), ...body].join("\n")], {
+    type: "text/csv;charset=utf-8",
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `numu-merchants-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }

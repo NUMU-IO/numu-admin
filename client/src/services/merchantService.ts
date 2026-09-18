@@ -14,6 +14,10 @@ export interface Merchant {
   logoUrl: string | null;
   plan: string;
   lifecycleState: string | null;
+  /** Days left before the trial expires and the storefront locks; null for
+   *  anyone not on a trial. */
+  trialDaysRemaining: number | null;
+  trialEndsAt: string | null;
   isInternal: boolean;
   /** Founder cohort year, or null when not a founder merchant. */
   founderCohort: string | null;
@@ -36,6 +40,10 @@ interface ApiStoreItem {
   owner_email: string | null;
   plan: string | null;
   lifecycle_state: string | null;
+  /** Days until the trial expires and the storefront locks. Null unless the
+   *  tenant is actually on a trial. */
+  trial_days_remaining: number | null;
+  trial_ends_at: string | null;
   is_internal: boolean;
   /** Founder-merchant cohort year ("2025"), or null. Lives on the tenant. */
   founder_cohort: string | null;
@@ -64,6 +72,8 @@ function mapStore(store: ApiStoreItem, index: number, pageOffset: number): Merch
     logoUrl: store.logo_url,
     plan: store.plan || "free",
     lifecycleState: store.lifecycle_state,
+    trialDaysRemaining: store.trial_days_remaining ?? null,
+    trialEndsAt: store.trial_ends_at ?? null,
     isInternal: store.is_internal ?? false,
     founderCohort: store.founder_cohort ?? null,
     status: store.status as Merchant["status"],

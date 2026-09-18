@@ -22,6 +22,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
+import { Tabs as NumuTabs } from "@/ds";
 import { DashboardLayoutSkeleton } from "@/components/DashboardLayoutSkeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -943,28 +944,22 @@ export default function WalletAdmin() {
   }
 
   return (
-    <DashboardLayout title="Merchant wallets">
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
-            <WalletIcon className="h-6 w-6 text-primary" />
-            Merchant wallets
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
-            Pay-as-you-go wallet control: review manual top-up receipts (the
-            merchant already sees the amount on hold), tune commission and
-            payment methods, and manage per-tenant balances.
-          </p>
-        </div>
-
-        <Tabs value={tab} onValueChange={setTab}>
-          <TabsList>
-            <TabsTrigger value="review">Top-up review</TabsTrigger>
-            <TabsTrigger value="settings">Settings</TabsTrigger>
-            <TabsTrigger value="wallets">Wallets</TabsTrigger>
-          </TabsList>
-        </Tabs>
-
+    <DashboardLayout
+      title="Merchant wallets"
+      subtitle="Pay-as-you-go control: top-up receipts, commission and payment methods, per-tenant balances."
+      tabs={
+        <NumuTabs
+          tabs={[
+            { id: "review", label: "Top-up review", icon: "clipboard" },
+            { id: "settings", label: "Settings", icon: "sliders" },
+            { id: "wallets", label: "Wallets", icon: "banknote" },
+          ]}
+          active={tab}
+          onChange={setTab}
+        />
+      }
+    >
+      <div className="ak-stack">
         {tab === "review" && <ReviewQueueTab />}
         {tab === "settings" && <SettingsTab />}
         {tab === "wallets" && <WalletsTab />}

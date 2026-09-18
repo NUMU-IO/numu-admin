@@ -1,7 +1,19 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-@custom-variant dark (&:is(.dark *));
+/* NUMU Design System — the token layer, the component classes and the
+   register attribute together. `data-numu-register="admin"` on <body>
+   (set in client/index.html) selects the cool, Navy-led operational
+   register; `data-numu-theme="dark"` on <html> retargets it for dark.
+   Everything below this import maps shadcn/ui's variable names onto the
+   design system's semantic layer, so the whole app reskins from here.
+
+   It lands in the `components` layer on purpose: above Tailwind's preflight
+   (so the design system's own base rules win) but below `utilities` (so a
+   Tailwind class on a page still overrides a design-system element rule). */
+@import "./ds/styles.css" layer(components);
+
+@custom-variant dark (&:is([data-numu-theme="dark"] *));
 
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
@@ -20,7 +32,7 @@
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
+  --color-accent: var(--accent-tint);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
@@ -40,99 +52,289 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
-  --font-sans: 'Plus Jakarta Sans', system-ui, sans-serif;
+
+  /* Status + risk, exposed as utilities so a page can say what it means
+     (`text-success`, `bg-danger-tint`) instead of picking a raw hue. */
+  --color-success: var(--status-success);
+  --color-success-tint: var(--status-success-tint);
+  --color-success-text: var(--status-success-text);
+  --color-warning: var(--status-warning);
+  --color-warning-tint: var(--status-warning-tint);
+  --color-warning-text: var(--status-warning-text);
+  --color-danger: var(--status-danger);
+  --color-danger-tint: var(--status-danger-tint);
+  --color-danger-text: var(--status-danger-text);
+  --color-info: var(--status-info);
+  --color-info-tint: var(--status-info-tint);
+  --color-info-text: var(--status-info-text);
+  --color-risk-low: var(--risk-low);
+  --color-risk-medium: var(--risk-medium);
+  --color-risk-high: var(--risk-high);
+  --color-risk-critical: var(--risk-critical);
+
+  --font-sans: var(--font-body);
+  --font-display: var(--font-heading);
+  --font-mono: var(--ff-mono);
 }
 
+/* ---------------------------------------------------------------------------
+   Raw Tailwind palette → NUMU ramps.
+
+   41 files still name hues directly (`bg-emerald-50`, `text-amber-700`, …).
+   Rather than rewrite 550 call sites into semantic ones in a single pass,
+   the hue families are retargeted onto the four NUMU ramps, so nothing
+   off-brand can render: green family → Sage, amber/orange → Saffron,
+   red/rose/pink → Terracotta, blue/indigo/violet/purple/cyan → the Navy
+   ramp, teal → Teal Ink, and the greys → Ink/Bone. Call sites keep their
+   meaning; only the pigment changes.
+--------------------------------------------------------------------------- */
+@theme {
+  /* Sage — success */
+  --color-emerald-50: #eef3ed;
+  --color-emerald-100: #dde7db;
+  --color-emerald-200: #c6d5c4;
+  --color-emerald-300: #a8bfa5;
+  --color-emerald-400: #89a986;
+  --color-emerald-500: #6b8e68;
+  --color-emerald-600: #5b7a58;
+  --color-emerald-700: #3d5c3a;
+  --color-emerald-800: #334d31;
+  --color-emerald-900: #263a24;
+  --color-emerald-950: #1a2818;
+  --color-green-50: var(--color-emerald-50);
+  --color-green-100: var(--color-emerald-100);
+  --color-green-200: var(--color-emerald-200);
+  --color-green-300: var(--color-emerald-300);
+  --color-green-400: var(--color-emerald-400);
+  --color-green-500: var(--color-emerald-500);
+  --color-green-600: var(--color-emerald-600);
+  --color-green-700: var(--color-emerald-700);
+  --color-green-800: var(--color-emerald-800);
+  --color-green-900: var(--color-emerald-900);
+  --color-green-950: var(--color-emerald-950);
+  --color-lime-50: var(--color-emerald-50);
+  --color-lime-100: var(--color-emerald-100);
+  --color-lime-500: var(--color-emerald-500);
+  --color-lime-600: var(--color-emerald-600);
+  --color-lime-700: var(--color-emerald-700);
+
+  /* Saffron — warning */
+  --color-amber-50: #fdf6e8;
+  --color-amber-100: #faeccb;
+  --color-amber-200: #f5da9c;
+  --color-amber-300: #efc66c;
+  --color-amber-400: #e8a430;
+  --color-amber-500: #d9962a;
+  --color-amber-600: #c18520;
+  --color-amber-700: #8a5d12;
+  --color-amber-800: #6f4a0f;
+  --color-amber-900: #563a0c;
+  --color-amber-950: #3c2708;
+  --color-yellow-50: var(--color-amber-50);
+  --color-yellow-100: var(--color-amber-100);
+  --color-yellow-200: var(--color-amber-200);
+  --color-yellow-300: var(--color-amber-300);
+  --color-yellow-400: var(--color-amber-400);
+  --color-yellow-500: var(--color-amber-500);
+  --color-yellow-600: var(--color-amber-600);
+  --color-yellow-700: var(--color-amber-700);
+  --color-yellow-800: var(--color-amber-800);
+  --color-yellow-900: var(--color-amber-900);
+  --color-orange-50: var(--color-amber-50);
+  --color-orange-100: var(--color-amber-100);
+  --color-orange-200: var(--color-amber-200);
+  --color-orange-300: var(--color-amber-300);
+  --color-orange-400: var(--color-amber-400);
+  --color-orange-500: var(--color-amber-500);
+  --color-orange-600: var(--color-amber-600);
+  --color-orange-700: var(--color-amber-700);
+  --color-orange-800: var(--color-amber-800);
+  --color-orange-900: var(--color-amber-900);
+
+  /* Terracotta — danger */
+  --color-red-50: #fbefe9;
+  --color-red-100: #f6ddd0;
+  --color-red-200: #edbaa3;
+  --color-red-300: #e19571;
+  --color-red-400: #d2703f;
+  --color-red-500: #c14a1c;
+  --color-red-600: #a63d14;
+  --color-red-700: #8b2f0f;
+  --color-red-800: #6f260c;
+  --color-red-900: #571e09;
+  --color-red-950: #3b1406;
+  --color-rose-50: var(--color-red-50);
+  --color-rose-100: var(--color-red-100);
+  --color-rose-200: var(--color-red-200);
+  --color-rose-300: var(--color-red-300);
+  --color-rose-400: var(--color-red-400);
+  --color-rose-500: var(--color-red-500);
+  --color-rose-600: var(--color-red-600);
+  --color-rose-700: var(--color-red-700);
+  --color-rose-800: var(--color-red-800);
+  --color-rose-900: var(--color-red-900);
+  --color-pink-50: var(--color-red-50);
+  --color-pink-100: var(--color-red-100);
+  --color-pink-200: var(--color-red-200);
+  --color-pink-500: var(--color-red-500);
+  --color-pink-600: var(--color-red-600);
+  --color-pink-700: var(--color-red-700);
+  --color-fuchsia-50: var(--color-red-50);
+  --color-fuchsia-100: var(--color-red-100);
+  --color-fuchsia-500: var(--color-red-500);
+  --color-fuchsia-600: var(--color-red-600);
+  --color-fuchsia-700: var(--color-red-700);
+
+  /* Navy — informational / primary */
+  --color-blue-50: #eef3f8;
+  --color-blue-100: #d6e0ec;
+  --color-blue-200: #b5c6dd;
+  --color-blue-300: #8aa5c2;
+  --color-blue-400: #5c83aa;
+  --color-blue-500: #3b6593;
+  --color-blue-600: #1f4a7a;
+  --color-blue-700: #003366;
+  --color-blue-800: #002952;
+  --color-blue-900: #001f3f;
+  --color-blue-950: #00162c;
+  --color-indigo-50: var(--color-blue-50);
+  --color-indigo-100: var(--color-blue-100);
+  --color-indigo-200: var(--color-blue-200);
+  --color-indigo-300: var(--color-blue-300);
+  --color-indigo-400: var(--color-blue-400);
+  --color-indigo-500: var(--color-blue-500);
+  --color-indigo-600: var(--color-blue-600);
+  --color-indigo-700: var(--color-blue-700);
+  --color-indigo-800: var(--color-blue-800);
+  --color-indigo-900: var(--color-blue-900);
+  --color-purple-50: var(--color-blue-50);
+  --color-purple-100: var(--color-blue-100);
+  --color-purple-200: var(--color-blue-200);
+  --color-purple-300: var(--color-blue-300);
+  --color-purple-400: var(--color-blue-400);
+  --color-purple-500: var(--color-blue-500);
+  --color-purple-600: var(--color-blue-600);
+  --color-purple-700: var(--color-blue-700);
+  --color-purple-800: var(--color-blue-800);
+  --color-purple-900: var(--color-blue-900);
+  --color-violet-50: var(--color-blue-50);
+  --color-violet-100: var(--color-blue-100);
+  --color-violet-500: var(--color-blue-500);
+  --color-violet-600: var(--color-blue-600);
+  --color-violet-700: var(--color-blue-700);
+  --color-sky-50: var(--color-blue-50);
+  --color-sky-100: var(--color-blue-100);
+  --color-sky-500: var(--color-blue-500);
+  --color-sky-600: var(--color-blue-600);
+  --color-sky-700: var(--color-blue-700);
+  --color-cyan-50: var(--color-blue-50);
+  --color-cyan-100: var(--color-blue-100);
+  --color-cyan-500: var(--color-blue-500);
+  --color-cyan-600: var(--color-blue-600);
+  --color-cyan-700: var(--color-blue-700);
+
+  /* Teal Ink — the muted accent */
+  --color-teal-50: #eaf1f0;
+  --color-teal-100: #cfe0de;
+  --color-teal-200: #a4c4c1;
+  --color-teal-300: #74a5a1;
+  --color-teal-400: #47837f;
+  --color-teal-500: #2c625f;
+  --color-teal-600: #23514f;
+  --color-teal-700: #1f4746;
+  --color-teal-800: #183836;
+  --color-teal-900: #122a29;
+
+  /* Greys → Cream / Bone / Ink, so a "neutral" surface still reads warm */
+  --color-gray-50: #fbf6ed;
+  --color-gray-100: #f5efe6;
+  --color-gray-200: #eae0ce;
+  --color-gray-300: #ded1b9;
+  --color-gray-400: #b3a894;
+  --color-gray-500: #8b93a1;
+  --color-gray-600: #5a6474;
+  --color-gray-700: #3f4757;
+  --color-gray-800: #232b3a;
+  --color-gray-900: #0f1624;
+  --color-gray-950: #080d16;
+  --color-slate-50: var(--color-gray-50);
+  --color-slate-100: var(--color-gray-100);
+  --color-slate-200: var(--color-gray-200);
+  --color-slate-300: var(--color-gray-300);
+  --color-slate-400: var(--color-gray-400);
+  --color-slate-500: var(--color-gray-500);
+  --color-slate-600: var(--color-gray-600);
+  --color-slate-700: var(--color-gray-700);
+  --color-slate-800: var(--color-gray-800);
+  --color-slate-900: var(--color-gray-900);
+  --color-zinc-50: var(--color-gray-50);
+  --color-zinc-100: var(--color-gray-100);
+  --color-zinc-200: var(--color-gray-200);
+  --color-zinc-300: var(--color-gray-300);
+  --color-zinc-400: var(--color-gray-400);
+  --color-zinc-500: var(--color-gray-500);
+  --color-zinc-600: var(--color-gray-600);
+  --color-zinc-700: var(--color-gray-700);
+  --color-zinc-800: var(--color-gray-800);
+  --color-zinc-900: var(--color-gray-900);
+  --color-neutral-50: var(--color-gray-50);
+  --color-neutral-100: var(--color-gray-100);
+  --color-neutral-200: var(--color-gray-200);
+  --color-neutral-500: var(--color-gray-500);
+  --color-neutral-600: var(--color-gray-600);
+  --color-neutral-900: var(--color-gray-900);
+  --color-stone-50: var(--color-gray-50);
+  --color-stone-100: var(--color-gray-100);
+  --color-stone-200: var(--color-gray-200);
+  --color-stone-500: var(--color-gray-500);
+  --color-stone-600: var(--color-gray-600);
+  --color-stone-900: var(--color-gray-900);
+}
+
+/* ---------------------------------------------------------------------------
+   shadcn/ui variable names, pointed at the NUMU semantic layer. These are
+   the only definitions — dark mode is handled upstream by the design
+   system retargeting the same semantic tokens under
+   [data-numu-theme="dark"], so there is no second copy of this map.
+--------------------------------------------------------------------------- */
 :root {
-  /* Soft Minimalist Theme - Warm and Approachable */
-  --primary: oklch(0.55 0.2 265); /* Soft indigo */
-  --primary-foreground: oklch(0.98 0 0);
-  --sidebar-primary: oklch(0.55 0.2 265);
-  --sidebar-primary-foreground: oklch(0.98 0 0);
-  
-  /* Chart colors - Pastel palette */
-  --chart-1: oklch(0.7 0.15 265); /* Soft indigo */
-  --chart-2: oklch(0.75 0.12 175); /* Soft teal */
-  --chart-3: oklch(0.8 0.1 85); /* Soft amber */
-  --chart-4: oklch(0.7 0.15 25); /* Soft coral */
-  --chart-5: oklch(0.75 0.12 320); /* Soft pink */
-  
-  --radius: 0.75rem;
-  
-  /* Warm off-white base */
-  --background: oklch(0.985 0.002 85);
-  --foreground: oklch(0.2 0.02 45); /* Warm charcoal */
-  
-  /* Pure white cards with warmth */
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.2 0.02 45);
-  
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.2 0.02 45);
-  
-  /* Soft secondary colors */
-  --secondary: oklch(0.96 0.005 85);
-  --secondary-foreground: oklch(0.4 0.02 45);
-  
-  /* Muted tones */
-  --muted: oklch(0.94 0.005 85);
-  --muted-foreground: oklch(0.55 0.015 45); /* Stone gray */
-  
-  /* Accent */
-  --accent: oklch(0.96 0.005 85);
-  --accent-foreground: oklch(0.2 0.02 45);
-  
-  /* Destructive - Soft coral */
-  --destructive: oklch(0.65 0.2 25);
-  --destructive-foreground: oklch(0.98 0 0);
-  
-  /* Borders - Subtle */
-  --border: oklch(0.92 0.005 85);
-  --input: oklch(0.92 0.005 85);
-  --ring: oklch(0.55 0.2 265);
-  
-  /* Sidebar - Slightly cooler */
-  --sidebar: oklch(0.99 0.002 85);
-  --sidebar-foreground: oklch(0.2 0.02 45);
-  --sidebar-accent: oklch(0.96 0.005 85);
-  --sidebar-accent-foreground: oklch(0.2 0.02 45);
-  --sidebar-border: oklch(0.92 0.005 85);
-  --sidebar-ring: oklch(0.55 0.2 265);
-}
+  --radius: 10px; /* --r-lg: the admin register's radius */
 
-.dark {
-  --primary: oklch(0.65 0.2 265);
-  --primary-foreground: oklch(0.98 0 0);
-  --sidebar-primary: oklch(0.65 0.2 265);
-  --sidebar-primary-foreground: oklch(0.98 0 0);
-  --background: oklch(0.15 0.01 265);
-  --foreground: oklch(0.92 0.005 85);
-  --card: oklch(0.2 0.01 265);
-  --card-foreground: oklch(0.92 0.005 85);
-  --popover: oklch(0.2 0.01 265);
-  --popover-foreground: oklch(0.92 0.005 85);
-  --secondary: oklch(0.25 0.01 265);
-  --secondary-foreground: oklch(0.8 0.005 85);
-  --muted: oklch(0.28 0.01 265);
-  --muted-foreground: oklch(0.65 0.01 265);
-  --accent: oklch(0.28 0.01 265);
-  --accent-foreground: oklch(0.98 0 0);
-  --destructive: oklch(0.65 0.2 25);
-  --destructive-foreground: oklch(0.98 0 0);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.65 0.2 265);
-  --chart-1: oklch(0.65 0.15 265);
-  --chart-2: oklch(0.7 0.12 175);
-  --chart-3: oklch(0.75 0.1 85);
-  --chart-4: oklch(0.65 0.15 25);
-  --chart-5: oklch(0.7 0.12 320);
-  --sidebar: oklch(0.2 0.01 265);
-  --sidebar-foreground: oklch(0.92 0.005 85);
-  --sidebar-accent: oklch(0.28 0.01 265);
-  --sidebar-accent-foreground: oklch(0.98 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.65 0.2 265);
+  --background: var(--surface-app);
+  --foreground: var(--text-body);
+  --card: var(--surface-card);
+  --card-foreground: var(--text-body);
+  --popover: var(--surface-overlay);
+  --popover-foreground: var(--text-body);
+
+  --primary: var(--accent);
+  --primary-foreground: var(--accent-on);
+  --secondary: var(--surface-panel);
+  --secondary-foreground: var(--text-body);
+  --muted: var(--surface-panel);
+  --muted-foreground: var(--text-muted);
+  --accent-foreground: var(--text-body);
+  --destructive: var(--status-danger);
+  --destructive-foreground: #ffffff;
+
+  --border: var(--border-subtle);
+  --input: var(--border-input);
+  --ring: var(--border-focus);
+
+  --chart-1: var(--viz-1);
+  --chart-2: var(--viz-2);
+  --chart-3: var(--viz-3);
+  --chart-4: var(--viz-4);
+  --chart-5: var(--viz-5);
+
+  --sidebar: var(--surface-nav);
+  --sidebar-foreground: var(--text-on-nav);
+  --sidebar-primary: var(--saffron);
+  --sidebar-primary-foreground: var(--navy-900);
+  --sidebar-accent: var(--surface-nav-active);
+  --sidebar-accent-foreground: var(--text-on-nav-active);
+  --sidebar-border: var(--border-nav);
+  --sidebar-ring: var(--saffron);
 }
 
 @layer base {
@@ -141,6 +343,7 @@
   }
   body {
     @apply bg-background text-foreground font-sans;
+    font-size: var(--fs-app-body);
   }
   button:not(:disabled),
   [role="button"]:not([aria-disabled="true"]),
@@ -184,26 +387,484 @@
     }
   }
 
-  /* Dashboard card styles */
+  /* The admin's default panel: white, radius 10, one subtle stacked
+     shadow. Hover lift only where the card is itself a control. */
   .dashboard-card {
-    @apply bg-card rounded-xl shadow-sm border border-border/50 p-5 transition-all duration-300;
+    background: var(--surface-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-card);
+    box-shadow: var(--elev-card);
+    padding: var(--sp-4);
+    transition: box-shadow var(--dur-base) var(--ease);
   }
 
   .dashboard-card:hover {
-    @apply shadow-md;
+    box-shadow: var(--elev-raised);
   }
 
-  /* Soft shadow utilities */
   .shadow-soft {
-    box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.08), 0 4px 16px -4px rgba(0, 0, 0, 0.04);
+    box-shadow: var(--sh-sm);
   }
 
   .shadow-soft-lg {
-    box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.1), 0 8px 24px -4px rgba(0, 0, 0, 0.06);
+    box-shadow: var(--sh-md);
   }
 }
 
-/* Custom scrollbar */
+/* Shell scaffolding, lifted from the design system's admin UI kit. Layout
+   only — every colour and space below is a token. */
+/* The shell owns the viewport and `.ak-scroll` is the only scroller. Sized
+   with percentages rather than `vh`: a `100vh` shell inside a document that
+   can still scroll leaves a band of untouched page below it once you reach
+   the bottom, which is what the white strip under the rail was. */
+html,
+body {
+  height: 100%;
+}
+#root {
+  height: 100%;
+}
+
+.ak-shell {
+  display: flex;
+  height: 100%;
+  overflow: hidden;
+}
+.ak-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.ak-scroll {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+.ak-page {
+  padding: var(--sp-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+.ak-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  min-width: 0;
+}
+.ak-metrics {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--sp-3);
+}
+.ak-metrics--4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.ak-2col {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-4);
+  align-items: start;
+}
+.ak-2col--wide {
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+}
+.ak-3col {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--sp-4);
+  align-items: start;
+}
+.ak-row-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding-bottom: var(--sp-3);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.ak-row-line:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+/* Tablet: metric strips halve, side-by-side panels stack. */
+@media (max-width: 1280px) {
+  .ak-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  /* A 4-tile strip goes to 2×2 rather than 3+1, which leaves a hole. */
+  .ak-metrics--4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .ak-3col {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+@media (max-width: 1080px) {
+  .ak-metrics,
+  .ak-metrics--4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .ak-2col,
+  .ak-2col--wide,
+  .ak-3col {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ak-page {
+    padding: var(--sp-4);
+  }
+}
+
+/* A stack trace, rendered so it can be read and copied rather than scanned
+   past. Wraps rather than scrolls horizontally. */
+.ak-stacktrace {
+  background: var(--surface-inset);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-inset);
+  padding: var(--sp-3);
+  max-height: 320px;
+  overflow: auto;
+  font-family: var(--ff-mono);
+  font-size: var(--fs-app-mono-sm);
+  line-height: 1.55;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Specimen rows on the design-system reference page. */
+.ak-specimen {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+.ak-specimen__icon {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-1);
+  width: 84px;
+}
+
+/* 404 — centred on the app ground, no shell around it. */
+.ak-notfound {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-5);
+  background: var(--surface-app);
+}
+.ak-notfound__card {
+  width: 100%;
+  max-width: 520px;
+}
+
+/* The activity feed: a tone dot, the action and actor, the entity it touched,
+   and when. Rows are separated by hairlines rather than boxed, so a long feed
+   reads as one column instead of a stack of cards. */
+.ak-feed {
+  display: flex;
+  flex-direction: column;
+}
+.ak-feed__row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.ak-feed__row:last-child {
+  border-bottom: none;
+}
+.ak-feed__dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-top: 5px;
+  flex: none;
+  border: 2px solid var(--status-neutral);
+}
+.ak-feed__dot--info {
+  border-color: var(--status-info);
+}
+/* A signal that was measured and is fine. Sage, so a healthy reading reads as
+   an answer rather than as an absence. */
+.ak-feed__dot--ok {
+  background: var(--status-success);
+}
+.ak-feed__dot--warning {
+  border-color: var(--status-warning);
+  background: var(--status-warning);
+}
+.ak-feed__dot--danger {
+  border-color: var(--status-danger);
+  background: var(--status-danger);
+}
+.ak-feed__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.ak-feed__title {
+  font-size: var(--fs-app-sm);
+  font-weight: var(--fw-medium);
+  color: var(--text-heading);
+}
+.ak-feed__actor {
+  font-size: var(--fs-app-mono-sm);
+  color: var(--text-link);
+}
+.ak-feed__meta {
+  font-family: var(--ff-mono);
+  font-size: var(--fs-app-mono-sm);
+  letter-spacing: var(--ls-mono);
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+.ak-feed__time {
+  font-family: var(--ff-mono);
+  font-size: var(--fs-app-meta);
+  letter-spacing: var(--ls-mono);
+  color: var(--text-faint);
+  white-space: nowrap;
+  flex: none;
+}
+
+/* An inset note block: merchant text, review reasons, operator context. */
+.ak-note {
+  background: var(--surface-inset);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-inset);
+  padding: var(--sp-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  font-size: var(--fs-app-sm);
+  white-space: pre-line;
+}
+
+/* Sign-in: Navy plate + form panel. Flat colour and one Souk strip — the
+   design system bans gradients, and the motif is a framing device only. */
+.ak-auth {
+  min-height: 100vh;
+  display: flex;
+  background: var(--surface-app);
+}
+.ak-auth__plate {
+  display: none;
+  width: 44%;
+  max-width: 640px;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--sp-7);
+  padding: var(--sp-8) var(--sp-7);
+  background: var(--surface-nav);
+  color: var(--text-on-nav);
+}
+.ak-auth__brand {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+.ak-auth__brand--compact {
+  margin-bottom: var(--sp-5);
+}
+/* Both classes, so this beats the `.ak-auth__brand` display above rather
+   than tying with it on specificity and losing on source order. */
+@media (min-width: 900px) {
+  .ak-auth__plate {
+    display: flex;
+  }
+  .ak-auth__brand.ak-auth__brand--compact {
+    display: none;
+  }
+}
+.ak-auth__kicker {
+  color: rgba(255, 255, 255, 0.55);
+}
+.ak-auth__pitch {
+  max-width: 34ch;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+.ak-auth__headline {
+  font-family: var(--font-heading);
+  font-size: var(--fs-title-l);
+  line-height: var(--lh-title-l);
+  letter-spacing: var(--ls-title);
+  color: var(--text-on-nav-active);
+}
+.ak-auth__body {
+  font-size: var(--fs-body-m);
+  line-height: var(--lh-body-m);
+  color: rgba(255, 255, 255, 0.72);
+}
+.ak-auth__foot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+.ak-auth__legal {
+  font-size: var(--fs-app-meta);
+  color: rgba(255, 255, 255, 0.5);
+}
+.ak-auth__panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-4);
+  padding: var(--sp-6) var(--sp-4);
+}
+.ak-auth__card {
+  width: 100%;
+  max-width: 420px;
+  padding: var(--sp-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.ak-auth__title {
+  font-size: var(--fs-title-s);
+}
+.ak-auth__sub {
+  font-size: var(--fs-app-sm);
+  color: var(--text-muted);
+  margin-bottom: var(--sp-3);
+}
+.ak-auth__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+.ak-auth__password {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.ak-auth__password .nin,
+.ak-auth__password .nin-wrap {
+  flex: 1;
+  min-width: 0;
+}
+.ak-auth__note {
+  max-width: 420px;
+  text-align: center;
+  font-size: var(--fs-app-xs);
+  color: var(--text-muted);
+}
+
+/* A table row's action cluster. The design system's `.ntb__actions` is a
+   44px single-control cell; these rows carry four. */
+.ak-rowactions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+}
+
+/* Name plus its inline qualifier badge, on one baseline. */
+.ak-cell-line {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+/* On a phone the topbar has room for the search entry and the avatar, and
+   not for the operator's name and role next to them. */
+/* An ID, a timestamp or a reference broken across two lines is no longer the
+   string the operator is matching against, so mono cells never wrap. Prose
+   cells still do — that rule is for identifiers only. */
+.ntb td.is-mono {
+  white-space: nowrap;
+}
+
+.ntp__whoName {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+@media (max-width: 900px) {
+  .ntp__whoName {
+    display: none;
+  }
+  .ntp__who {
+    border-inline-start: none;
+    padding-inline-start: 0;
+  }
+  /* Below the tablet breakpoint a dense table compresses its columns into
+     unreadable slivers. Give it a floor and let `.ntb-wrap` scroll it. */
+  .ntb {
+    min-width: 860px;
+  }
+}
+
+/* Below 900px the rail leaves the flow and slides in over the page. It
+   enters from the inline start so it mirrors correctly under RTL. */
+.ak-drawer-wrap {
+  position: fixed;
+  inset-block: 0;
+  inset-inline-start: 0;
+  z-index: var(--z-drawer);
+  transform: translateX(-100%);
+  transition: transform var(--dur-slow) var(--ease);
+}
+[dir="rtl"] .ak-drawer-wrap {
+  transform: translateX(100%);
+}
+.ak-drawer-wrap.is-open,
+[dir="rtl"] .ak-drawer-wrap.is-open {
+  transform: translateX(0);
+}
+.ak-drawer {
+  height: 100%;
+}
+.ak-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--z-drawer) - 1);
+  border: none;
+  padding: 0;
+  background: var(--surface-scrim);
+}
+
+@media (min-width: 901px) {
+  body {
+    overflow: hidden;
+  }
+}
+
+/* Below 900px the sidebar becomes an overlay drawer; the shell stops being a
+   fixed-height flex row so the page scrolls the ordinary way, which is what a
+   phone expects and what lets the browser chrome collapse on scroll. */
+@media (max-width: 900px) {
+  html,
+  body {
+    height: auto;
+  }
+  #root {
+    height: auto;
+  }
+  .ak-shell {
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+  }
+  .ak-scroll {
+    overflow: visible;
+  }
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -214,10 +875,254 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: oklch(0.8 0.005 85);
+  background: var(--border-strong);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: oklch(0.7 0.005 85);
+  background: var(--ink-faint);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PWA + phone
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* The notification bell. Matches `.nib` rather than reusing IconButton,
+   because it needs a positioned child for the dot. */
+/* `flex: 1` on a button whose content is a placeholder sentence cannot
+   shrink below that sentence without this — the default `min-width: auto`
+   is what pushed the topbar's right-hand controls off screen. */
+.ntp__search {
+  min-width: 0;
+}
+
+.ak-bell {
+  position: relative;
+  width: var(--control-h);
+  height: var(--control-h);
+  min-width: var(--control-h);
+  padding: 0;
+  border-radius: var(--r-md);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--dur-base) var(--ease);
+}
+.ak-bell:hover {
+  background: var(--surface-hover);
+  color: var(--text-body);
+}
+.ak-bell:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* Shown when notifications are OFF. Saffron, not Terracotta: nothing is
+   broken — the platform simply cannot reach anyone right now. */
+.ak-bell__dot {
+  position: absolute;
+  top: 6px;
+  inset-inline-end: 6px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--status-warning-text);
+  /* Rings the dot in the topbar's own surface so it reads as a badge rather
+     than a smudge on the glyph. */
+  box-shadow: 0 0 0 2px var(--surface-card);
+}
+
+.ak-bell__note {
+  padding: var(--sp-2) var(--sp-3) var(--sp-3);
+  font-size: var(--fs-app-xs);
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
+/* ─── Phone ────────────────────────────────────────────────────────────────
+   Below 640px the shell is one column with a drawer, and everything that was
+   a convenience on a desktop is competing for a 360px-wide strip. */
+@media (max-width: 640px) {
+  .ak-hide-phone {
+    display: none;
+  }
+
+  /* Tighter gutters. At 360px, sp-5 on both sides costs a fifth of the
+     screen before any content is drawn. */
+  .ak-page {
+    padding: var(--sp-3);
+    gap: var(--sp-3);
+  }
+  .nph {
+    padding: var(--sp-3);
+  }
+
+  /* Two tiles across, not one: an operator opens this screen to scan ten
+     numbers, and a single column turns that into four screens of scrolling. */
+  .ak-metrics,
+  .ak-metrics--4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--sp-2);
+  }
+  .nmt {
+    padding: var(--sp-3);
+  }
+  /* The number is what the tile is for; at 179px wide it needs the room. */
+  .nmt__value {
+    font-size: 24px;
+  }
+  /* Drop the sparkline. It renders at a fixed 88px and cannot shrink, so
+     beside a six-figure number it overflowed the tile by 49px — measured at
+     390px, and it took the whole document with it because a tile has no
+     scroll container. The trend is still on screen: the delta under the
+     number says the same thing in less space. */
+  .nmt__row > :not(.nmt__value) {
+    /* !important because Sparkline sets `display: block` inline, and an
+       inline style beats any selector without it. */
+    display: none !important;
+  }
+
+  /* The topbar keeps the drawer control, the search entry and the operator's
+     avatar. The keyboard hint goes: there is no keyboard. */
+  .ntp {
+    padding: 0 var(--sp-2);
+    gap: var(--sp-2);
+  }
+  .ntp__kbd {
+    display: none;
+  }
+  /* The search entry collapses to its icon. Measured at 390px: the full-width
+     button plus the environment chip, bell, refresh and avatar overflowed the
+     topbar by 243px, and a topbar cannot scroll — the controls past the edge
+     were simply unreachable. */
+  .ntp__search {
+    flex: none;
+    width: var(--control-h);
+    min-width: 0;
+    padding: 0;
+    /* Beats the inline style the design system's Topbar sets. */
+    justify-content: center !important;
+  }
+  .ntp__search > span {
+    display: none;
+  }
+
+  /* An action row that overflows its header is unreachable — the header does
+     not scroll sideways. Let it wrap and give the buttons the full width so
+     they are hit targets rather than slivers. */
+  .nph__actions {
+    margin-inline-start: 0;
+    width: 100%;
+  }
+  .nph__actions > * {
+    flex: 1 1 auto;
+  }
+
+  /* 44px is the smallest reliable touch target. The design system's dense
+     controls are built for a mouse. */
+  .nb,
+  .nib,
+  .ak-bell {
+    min-height: 40px;
+  }
+  .ak-rowactions {
+    gap: var(--sp-1);
+  }
+
+  /* A chart under ~200px tall stops being readable and becomes decoration. */
+  .nch-wrap,
+  .ak-chart {
+    min-height: 200px;
+  }
+
+  /* The drawer keeps a sliver of the page visible so it is obvious what
+     tapping outside will do. */
+  .ak-drawer-wrap {
+    width: min(280px, 84vw);
+  }
+  .ak-drawer-wrap .nsb {
+    width: 100%;
+  }
+}
+
+/* ─── Installed app ────────────────────────────────────────────────────────
+   `viewport-fit=cover` (index.html) lets the app paint under the notch and
+   the home indicator, which is what makes the navy rail run to the screen
+   edge. It also means the shell has to pay the insets back itself, or the
+   topbar sits under the clock and the last table row under the home bar.
+
+   Applied for every viewport, not only phones: a desktop browser reports
+   0px for all four, so these are no-ops there. */
+.ntp {
+  padding-top: env(safe-area-inset-top);
+  height: calc(var(--shell-topbar-h) + env(safe-area-inset-top));
+  padding-inline-start: max(var(--sp-4), env(safe-area-inset-left));
+  padding-inline-end: max(var(--sp-4), env(safe-area-inset-right));
+}
+.ak-scroll {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.ak-drawer-wrap {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+@media (max-width: 640px) {
+  .ntp {
+    padding-inline-start: max(var(--sp-2), env(safe-area-inset-left));
+    padding-inline-end: max(var(--sp-2), env(safe-area-inset-right));
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Marketing
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* A rendered message, as the merchant will see it. `dir: auto` on the element
+   itself so an Arabic body lays out right-to-left inside an English page. */
+.ak-preview {
+  background: var(--surface-inset);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-inset);
+  padding: var(--sp-4);
+  max-height: 320px;
+  overflow: auto;
+  font-size: var(--fs-app-sm);
+  line-height: 1.7;
+  color: var(--text-body);
+}
+.ak-preview p {
+  margin: 0 0 var(--sp-3);
+}
+.ak-preview p:last-child {
+  margin-bottom: 0;
+}
+.ak-preview ul {
+  margin: 0 0 var(--sp-3);
+  padding-inline-start: var(--sp-5);
+}
+.ak-preview strong {
+  font-weight: var(--fw-semibold);
+  word-break: break-all;
+}
+
+/* A message excerpt in a table. One line, ellipsis, never a wrapped cell that
+   pushes every other row's height around. */
+.ak-truncate {
+  display: block;
+  max-width: 42ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The reward amount and its on/off switch, on one baseline. */
+.ak-milestone {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-3);
+  justify-content: flex-end;
 }

@@ -20,6 +20,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
+import { Tabs as NumuTabs } from "@/ds";
 import { DashboardLayoutSkeleton } from "@/components/DashboardLayoutSkeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -880,34 +881,22 @@ export default function SubscriptionPayments() {
   }
 
   return (
-    <DashboardLayout title="Subscription payments">
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
-            <BadgeCheck className="h-6 w-6 text-primary" />
-            Subscription payments
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
-            InstaPay plan payments, the plan catalog (limits, features,
-            prices), and the subscription lifecycle: pre-expiry warnings and
-            the dunning ladder.
-          </p>
-        </div>
-
-        <Tabs value={tab} onValueChange={setTab}>
-          <TabsList>
-            <TabsTrigger value="review">Review queue</TabsTrigger>
-            <TabsTrigger value="plans" className="gap-1.5">
-              <Layers className="h-3.5 w-3.5" />
-              Plans &amp; features
-            </TabsTrigger>
-            <TabsTrigger value="lifecycle" className="gap-1.5">
-              <BellRing className="h-3.5 w-3.5" />
-              Lifecycle
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
-
+    <DashboardLayout
+      title="Subscription payments"
+      subtitle="InstaPay plan receipts, the plan catalogue, and the renewal and dunning ladder."
+      tabs={
+        <NumuTabs
+          tabs={[
+            { id: "review", label: "Review queue", icon: "clipboard" },
+            { id: "plans", label: "Plans and features", icon: "layout" },
+            { id: "lifecycle", label: "Lifecycle", icon: "bell" },
+          ]}
+          active={tab}
+          onChange={setTab}
+        />
+      }
+    >
+      <div className="ak-stack">
         {tab === "review" && <ReviewQueue />}
         {tab === "plans" && <PlansTab />}
         {tab === "lifecycle" && <LifecycleTab />}

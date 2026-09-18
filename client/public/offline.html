@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Offline — NUMU Admin</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <!-- Self-contained on purpose: this page is served when the network is
+         gone, so it cannot depend on a stylesheet, a font or an icon that
+         might not be in the cache. Design-system values are inlined rather
+         than referenced. -->
+    <style>
+      :root {
+        color-scheme: light;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        background: #faf6f0;
+        color: #14191f;
+        font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+      }
+      .card {
+        max-width: 380px;
+        text-align: center;
+      }
+      .mark {
+        width: 56px;
+        height: 56px;
+        margin: 0 auto 20px;
+        border-radius: 14px;
+        background: #003366;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #faf6f0;
+        font-size: 24px;
+        font-weight: 700;
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: 20px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+      }
+      p {
+        margin: 0 0 20px;
+        font-size: 14px;
+        line-height: 1.6;
+        color: #5a6470;
+      }
+      button {
+        appearance: none;
+        border: 1px solid #003366;
+        background: #003366;
+        color: #faf6f0;
+        border-radius: 8px;
+        padding: 10px 20px;
+        font: inherit;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        min-height: 44px;
+      }
+      button:hover {
+        background: #002952;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="mark">N</div>
+      <h1>You are offline</h1>
+      <!-- Says plainly that nothing is cached, because the alternative is an
+           operator assuming the queue really is empty. -->
+      <p>
+        The backoffice needs a connection — every screen reads live platform data,
+        so nothing is stored on this device to show you.
+      </p>
+      <button type="button" onclick="location.reload()">Try again</button>
+    </div>
+  </body>
+</html>

@@ -6,8 +6,8 @@
  *
  * Endpoints (all SUPER_ADMIN, cookie-authed; apiClient unwraps `data`):
  *
- *   GET  /admin/whatsapp/access-requests?status=<pending|approved|
- *          rejected|disabled|all>
+ *   GET  /admin/whatsapp/access-requests?status=<pending|awaiting_payment|
+ *          approved|expired|rejected|disabled|all>
  *     → { requests: AdminWhatsAppAccessItem[]; counts: {...} }
  *       `counts` are GLOBAL per-status totals (independent of the
  *       `status` filter) so the queue can label its tabs.
@@ -18,8 +18,17 @@
  *   POST /admin/whatsapp/access-requests/{id}/enable   { notes? }
  *     → the updated AdminWhatsAppAccessItem.
  *
- * approve + enable both land on status "approved"; disable → "disabled";
- * reject → "rejected". An illegal transition comes back as a 409 whose
+ *   POST /admin/whatsapp/access-requests/{id}/price
+ *          { amount_cents, billing_cycle, message_allowance?, plan_key?, notes? }
+ *     → { request, intent_id, special_reference, amount_cents, currency,
+ *         destination }. 503 when InstaPay is not configured.
+ *
+ * approve + enable both land on status "approved" as a free grant;
+ * disable → "disabled"; reject → "rejected". Pricing opens an InstaPay
+ * payment and moves the request to "awaiting_payment", unless it is already
+ * approved inside a paid period (a renewal, which stays "approved"). The
+ * merchant's receipt lands in the subscription payment proofs queue, and
+ * approving it switches access on. An illegal transition comes back as a 409 whose
  * `detail` apiClient re-throws as an Error message — the page surfaces
  * that in an error toast.
  */
@@ -29,7 +38,9 @@ import { apiClient } from "./api";
 /** Lifecycle status of a single access request. */
 export type WhatsappAccessStatus =
   | "pending"
+  | "awaiting_payment"
   | "approved"
+  | "expired"
   | "rejected"
   | "disabled";
 
@@ -38,6 +49,8 @@ export type WhatsappAccessStatusFilter = WhatsappAccessStatus | "all";
 
 /** A mutating action → its matching POST sub-path. */
 export type WhatsappAccessAction = "approve" | "reject" | "disable" | "enable";
+
+export type WhatsappBillingCycle = "monthly" | "quarterly" | "yearly";
 
 export interface AdminWhatsAppAccessItem {
   id: string;
@@ -55,6 +68,13 @@ export interface AdminWhatsAppAccessItem {
   reviewer_user_id: string | null;
   reviewed_at: string | null; // ISO
   review_reason: string | null;
+  plan_key: string | null;
+  amount_cents: number | null; // piasters, per billing cycle
+  currency: string | null;
+  billing_cycle: WhatsappBillingCycle | null;
+  active_until: string | null; // ISO; null = no expiry
+  message_allowance: number | null; // null = uncapped
+  messages_used: number | null; // current period; approved rows only
   created_at: string; // ISO
   updated_at: string; // ISO
 }
@@ -66,6 +86,23 @@ export interface WhatsappAccessListResponse {
 
 export interface WhatsappAccessActionRequest {
   notes?: string;
+}
+
+export interface WhatsappAccessPriceRequest {
+  amount_cents: number;
+  billing_cycle: WhatsappBillingCycle;
+  message_allowance?: number | null;
+  plan_key?: string;
+  notes?: string;
+}
+
+export interface WhatsappAccessPriceResponse {
+  request: AdminWhatsAppAccessItem;
+  intent_id: string;
+  special_reference: string;
+  amount_cents: number;
+  currency: string;
+  destination: string | null;
 }
 
 /**
@@ -126,6 +163,21 @@ export function enableWhatsappAccessRequest(
   notes?: string,
 ): Promise<AdminWhatsAppAccessItem> {
   return actOnWhatsappAccessRequest(id, "enable", notes);
+}
+
+/** POST …/{id}/price — bill the store for a period of access. */
+export function priceWhatsappAccessRequest(
+  id: string,
+  body: WhatsappAccessPriceRequest,
+): Promise<WhatsappAccessPriceResponse> {
+  return apiClient<WhatsappAccessPriceResponse>(
+    `/admin/whatsapp/access-requests/${id}/price`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  );
 }
 
 /**

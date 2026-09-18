@@ -1,348 +1,140 @@
 /**
- * Sidebar Component - NUMU Admin Dashboard
- * 
- * Design: Soft Minimalist with floating sidebar
- * Features: Icon navigation with labels, user profile with logout
+ * Primary navigation — the Navy rail from the NUMU design system.
+ *
+ * Three things it does that a plain link list does not: it groups pages by
+ * operational domain, it carries live queue depths so an operator can see
+ * where the work is without opening anything, and it collapses to an icon
+ * rail on tablet rather than disappearing.
  */
 
 import { useAuth } from "@/_core/hooks/useAuth";
-import { cn } from "@/lib/utils";
-import {
-  BadgeCheck,
-  BarChart3,
-  Building2,
-  UserPlus,
-  CreditCard,
-  FileText,
-  Globe,
-  Home,
-  KeyRound,
-  LogOut,
-  Mail,
-  Menu,
-  MessageCircle,
-  Package,
-  Palette,
-  Scale,
-  Wallet,
-  ServerCog,
-  Settings,
-  ShieldCheck,
-  ShoppingCart,
-  Star,
-  Users,
-  History,
-  Ticket,
-  X,
-  Zap,
-} from "lucide-react";
-import { Link, useLocation } from "wouter";
-import { toast } from "sonner";
+import { IconButton, SidebarNav, type NavSection } from "@/ds";
+import { ADMIN_NAV, navIdForPath, navItemById } from "@/lib/adminNav";
+import { getCurrentEnv } from "@/lib/env";
+import { getQueueCounts } from "@/services/dashboardService";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-
-interface NavItem {
-  icon: React.ElementType;
-  label: string;
-  href: string;
-  badge?: number;
-}
-
-const mainNavItems: NavItem[] = [
-  { icon: Home, label: "Overview", href: "/" },
-  { icon: UserPlus, label: "Leads", href: "/leads" },
-  { icon: Building2, label: "Merchants", href: "/merchants" },
-  { icon: ShoppingCart, label: "Orders", href: "/orders" },
-  { icon: Users, label: "Customers", href: "/customers" },
-  { icon: BarChart3, label: "Analytics", href: "/analytics" },
-  { icon: CreditCard, label: "Billing", href: "/billing" },
-  { icon: Globe, label: "Landing Page", href: "/landing-page" },
-  { icon: CreditCard, label: "Pricing Plans", href: "/pricing-plans" },
-  { icon: Settings, label: "Plan Limits", href: "/plan-limits" },
-  { icon: Palette, label: "Themes", href: "/themes" },
-  { icon: Package, label: "Marketplace Reviews", href: "/marketplace-reviews" },
-  { icon: Ticket, label: "Beta Program", href: "/beta-program" },
-];
-
-// Session B — Marketplace section. Themes is the renamed
-// /marketplace/flags page (now /marketplace/themes); Review survives as-is.
-// Reviews + Snapshots are file 05 stretch goals deferred to Session C —
-// surfaced here as "coming soon" so the admin nav structure is stable
-// before those pages land.
-interface MarketplaceNavItem extends NavItem {
-  comingSoon?: boolean;
-}
-
-const marketplaceNavItems: MarketplaceNavItem[] = [
-  { icon: Palette, label: "Themes", href: "/marketplace/themes" },
-  { icon: ShieldCheck, label: "Review queue", href: "/marketplace/review" },
-  { icon: MessageCircle, label: "WhatsApp Access", href: "/whatsapp-access" },
-  { icon: Star, label: "Reviews", href: "/marketplace/reviews", comingSoon: true },
-  // Session C — snapshots browser landed; un-grey. Defaults to the
-  // bare /marketplace/snapshots route which prompts the admin to pick
-  // a store. Future enhancement: a sub-page with a store selector.
-  { icon: History, label: "Snapshots", href: "/marketplace/snapshots" },
-];
-
-// Session B — Platform section. /platform/settings is the new
-// default-theme picker. Distinct from /settings (which targets the
-// `platform_settings` JSONB bag — branding, signups, auth policy).
-const platformNavItems: NavItem[] = [
-  { icon: ServerCog, label: "Settings", href: "/platform/settings" },
-  // Capability registry (ADR-0 / ADR-6) — the control plane for what may
-  // extend NUMU, including the platform-wide kill switch.
-  { icon: KeyRound, label: "Capabilities", href: "/platform/capabilities" },
-];
-
-const secondaryNavItems: NavItem[] = [
-  { icon: Wallet, label: "Merchant Wallets", href: "/wallets" },
-  { icon: BadgeCheck, label: "Subscription Payments", href: "/subscription-payments" },
-  { icon: Scale, label: "Reconciliation", href: "/reconciliation" },
-  { icon: FileText, label: "Reports", href: "/reports" },
-  { icon: Menu, label: "Merchant Hub Nav", href: "/merchant-hub-nav" },
-  { icon: Mail, label: "Email Templates", href: "/email-templates" },
-  { icon: Settings, label: "Settings", href: "/settings" },
-];
+import { useIsMobile } from "@/hooks/useMobile";
+import { toast } from "sonner";
+import { useLocation } from "wouter";
 
 interface SidebarProps {
-  /** Mobile drawer state — controlled by DashboardLayout. Desktop
-   *  ignores this and always renders the sidebar inline. */
+  /** Mobile drawer state — owned by DashboardLayout. */
   mobileOpen?: boolean;
   onMobileClose?: () => void;
 }
 
 export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}) {
-  const [location] = useLocation();
+  const [location, navigate] = useLocation();
   const { user, logout } = useAuth();
   const [loggingOut, setLoggingOut] = useState(false);
+  // Below 1180px the rail collapses to icons; below 900px it becomes an
+  // overlay drawer and goes back to full width, because an icon-only rail
+  // floating over the page is a puzzle rather than a shortcut.
+  const isDrawer = useIsMobile(900);
+  const collapsed = useIsMobile(1180) && !isDrawer;
 
-  // Auto-close the drawer on route change so tapping a nav item
-  // navigates AND dismisses the drawer in the same gesture.
+  // Tapping a nav item navigates and dismisses the drawer in one gesture.
   useEffect(() => {
     if (mobileOpen) onMobileClose?.();
-    // We intentionally don't include onMobileClose in the deps — it's
-    // expected to be stable from the parent. Only the route matters.
+    // Only the route matters here; the callback is stable from the parent.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location]);
+
+  const { data: queues } = useQuery({
+    queryKey: ["dashboard", "queues"],
+    queryFn: getQueueCounts,
+    // Queue depths are the one number on screen that goes stale while an
+    // operator reads it, so they refresh on their own.
+    refetchInterval: 60_000,
+  });
+
+  const sections: NavSection[] = ADMIN_NAV.map((section) => ({
+    label: section.label,
+    items: section.items.map((item) => {
+      const count = item.queueKey ? queues?.[item.queueKey] : undefined;
+      return {
+        id: item.id,
+        label: item.label,
+        icon: item.icon,
+        // A zero-depth queue shows no badge at all. "0 waiting" is not
+        // information an operator needs, and it dilutes the ones that are.
+        count: count ? count : undefined,
+        alert: Boolean(count) && item.alertQueue,
+      };
+    }),
+  }));
 
   const handleLogout = async () => {
     setLoggingOut(true);
     try {
       await logout();
-      toast.success("Logged out successfully");
+      toast.success("Signed out");
     } catch {
-      toast.error("Failed to logout");
+      toast.error("Sign out failed");
     } finally {
       setLoggingOut(false);
     }
   };
 
-  // Get user initials
-  const getInitials = (name?: string | null) => {
-    if (!name) return "AD";
-    const parts = name.split(" ");
-    if (parts.length >= 2) {
-      return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-    }
-    return name.substring(0, 2).toUpperCase();
-  };
+  const rail = (
+    <SidebarNav
+      sections={sections}
+      active={navIdForPath(location)}
+      onNavigate={(id) => {
+        const item = navItemById(id);
+        if (item) navigate(item.href);
+      }}
+      env={getCurrentEnv()}
+      collapsed={collapsed}
+      className={isDrawer ? "ak-drawer" : undefined}
+      footer={
+        collapsed ? (
+          <IconButton
+            icon="logOut"
+            label="Sign out"
+            tone="onNav"
+            size="sm"
+            disabled={loggingOut}
+            onClick={handleLogout}
+          />
+        ) : (
+          <>
+            <span
+              className="nsb__env"
+              style={{ background: "transparent", padding: 0, opacity: 0.7 }}
+              title={user?.email ?? undefined}
+            >
+              {user?.email ?? "signed in"}
+            </span>
+            <IconButton
+              icon="logOut"
+              label="Sign out"
+              tone="onNav"
+              size="sm"
+              disabled={loggingOut}
+              onClick={handleLogout}
+              style={{ marginInlineStart: "auto" }}
+            />
+          </>
+        )
+      }
+    />
+  );
+
+  if (!isDrawer) return rail;
 
   return (
     <>
-      {/* Mobile backdrop — click to dismiss. ``lg:hidden`` so the
-          desktop layout never sees it. */}
       {mobileOpen ? (
         <button
           type="button"
           aria-label="Close navigation"
           onClick={onMobileClose}
-          className="lg:hidden fixed inset-0 z-30 bg-foreground/40 backdrop-blur-[2px]"
+          className="ak-scrim"
         />
       ) : null}
-
-      <aside
-        className={cn(
-          // Drawer transform: hidden off-screen on mobile, visible
-          // when ``mobileOpen``. On lg+ the sidebar is always
-          // ``translate-x-0`` regardless of the prop.
-          "fixed left-0 top-0 z-40 h-screen w-64 bg-card border-r border-border/50 shadow-soft flex flex-col transition-transform duration-200 ease-out",
-          "lg:translate-x-0",
-          mobileOpen ? "translate-x-0" : "-translate-x-full",
-        )}
-      >
-      {/* Logo */}
-      <div className="flex items-center gap-3 px-6 py-5 border-b border-border/50">
-        <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center">
-          <Zap className="w-5 h-5 text-primary-foreground" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <h1 className="font-bold text-lg text-foreground">NUMU</h1>
-          <p className="text-xs text-muted-foreground">Admin Backoffice</p>
-        </div>
-        {/* Close button — mobile only. Desktop never has the drawer
-            state to "close". */}
-        <button
-          type="button"
-          onClick={onMobileClose}
-          className="lg:hidden p-1.5 -mr-1.5 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-          aria-label="Close navigation"
-        >
-          <X className="w-4 h-4" />
-        </button>
-      </div>
-
-      {/* Main Navigation */}
-      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-        <p className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-          Main Menu
-        </p>
-        {mainNavItems.map((item) => {
-          const isActive = location === item.href;
-          return (
-            <Link key={item.href} href={item.href}>
-              <div
-                className={cn(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200",
-                  isActive
-                    ? "bg-primary/10 text-primary font-medium"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                )}
-              >
-                <item.icon className={cn("w-5 h-5", isActive && "text-primary")} />
-                <span className="text-sm">{item.label}</span>
-                {item.badge && (
-                  <span className="ml-auto bg-primary/10 text-primary text-xs font-medium px-2 py-0.5 rounded-full">
-                    {item.badge}
-                  </span>
-                )}
-              </div>
-            </Link>
-          );
-        })}
-
-        <div className="pt-4">
-          <p className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-            Marketplace
-          </p>
-          {marketplaceNavItems.map((item) => {
-            // Active state honours nested paths so /marketplace/themes/anything
-            // stays highlighted under the Themes entry. Snapshots is also
-            // prefix-matched because the real URL takes a store_id.
-            const isActive =
-              location === item.href || location.startsWith(`${item.href}/`);
-            const node = (
-              <div
-                className={cn(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200",
-                  item.comingSoon
-                    ? "text-muted-foreground/50 cursor-not-allowed"
-                    : isActive
-                      ? "bg-primary/10 text-primary font-medium"
-                      : "text-muted-foreground hover:bg-accent hover:text-foreground",
-                )}
-              >
-                <item.icon
-                  className={cn(
-                    "w-5 h-5",
-                    !item.comingSoon && isActive && "text-primary",
-                  )}
-                />
-                <span className="text-sm">{item.label}</span>
-                {item.comingSoon && (
-                  <span className="ml-auto text-[10px] uppercase tracking-wider text-muted-foreground/60">
-                    soon
-                  </span>
-                )}
-              </div>
-            );
-            // Wrap clickable items in <Link>; coming-soon items render as
-            // plain divs (no navigation surface).
-            return item.comingSoon ? (
-              <div key={item.href}>{node}</div>
-            ) : (
-              <Link key={item.href} href={item.href}>
-                {node}
-              </Link>
-            );
-          })}
-        </div>
-
-        <div className="pt-4">
-          <p className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-            Platform
-          </p>
-          {platformNavItems.map((item) => {
-            const isActive =
-              location === item.href || location.startsWith(`${item.href}/`);
-            return (
-              <Link key={item.href} href={item.href}>
-                <div
-                  className={cn(
-                    "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200",
-                    isActive
-                      ? "bg-primary/10 text-primary font-medium"
-                      : "text-muted-foreground hover:bg-accent hover:text-foreground",
-                  )}
-                >
-                  <item.icon className={cn("w-5 h-5", isActive && "text-primary")} />
-                  <span className="text-sm">{item.label}</span>
-                </div>
-              </Link>
-            );
-          })}
-        </div>
-
-        <div className="pt-4">
-          <p className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-            System
-          </p>
-          {secondaryNavItems.map((item) => {
-            const isActive = location === item.href;
-            return (
-              <Link key={item.href} href={item.href}>
-                <div
-                  className={cn(
-                    "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200",
-                    isActive
-                      ? "bg-primary/10 text-primary font-medium"
-                      : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                  )}
-                >
-                  <item.icon className={cn("w-5 h-5", isActive && "text-primary")} />
-                  <span className="text-sm">{item.label}</span>
-                </div>
-              </Link>
-            );
-          })}
-        </div>
-      </nav>
-
-      {/* User Profile */}
-      <div className="border-t border-border/50 p-4">
-        <div className="flex items-center gap-3 px-2">
-          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary/20 to-primary/40 flex items-center justify-center">
-            <span className="text-sm font-semibold text-primary">
-              {getInitials(user?.name)}
-            </span>
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-foreground truncate">
-              {user?.name || "Admin User"}
-            </p>
-            <p className="text-xs text-muted-foreground truncate">
-              {user?.email || "admin@numueg.app"}
-            </p>
-          </div>
-          <button 
-            onClick={handleLogout}
-            disabled={loggingOut}
-            className="p-2 rounded-lg hover:bg-accent transition-colors disabled:opacity-50"
-            title="Logout"
-          >
-            <LogOut className="w-4 h-4 text-muted-foreground" />
-          </button>
-        </div>
-      </div>
-    </aside>
+      <div className={`ak-drawer-wrap${mobileOpen ? " is-open" : ""}`}>{rail}</div>
     </>
   );
 }

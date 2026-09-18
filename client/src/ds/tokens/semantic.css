@@ -1,0 +1,249 @@
+/* SEMANTIC TOKENS
+   ----------------------------------------------------------------------------
+   Two visual registers share one token vocabulary:
+
+     default / [data-numu-register="admin"]      operational admin, cool, calm
+     [data-numu-register="editorial"]            marketing + decks, warm
+
+   Components read ONLY from this layer (or components.css). Swapping the
+   register attribute on a subtree re-skins everything inside it — that is how
+   a NUMU product screen can be embedded inside an editorial landing page
+   without either one leaking into the other.
+
+   [data-numu-theme="dark"] retargets the same names. Dark mode is defined so
+   nothing hardcodes a light value; it is not the primary shipping target. */
+
+:root,
+[data-numu-register="admin"] {
+  /* Surfaces */
+  --surface-app: var(--cream);          /* the window behind everything */
+  --surface-card: var(--white);         /* default raised app surface */
+  --surface-panel: var(--paper);        /* secondary panel, filter bar */
+  --surface-inset: var(--paper-hi);     /* wells, code blocks, note bodies */
+  --surface-nav: var(--navy-700);       /* primary navigation chrome */
+  --surface-nav-active: var(--navy-800);
+  --surface-nav-hover: rgba(255, 255, 255, 0.08);
+  --surface-overlay: var(--white);      /* dialogs, drawers, popovers */
+  --surface-scrim: rgba(15, 22, 36, 0.44);
+  --surface-hover: rgba(15, 22, 36, 0.035);
+  --surface-selected: var(--tint-navy);
+  --surface-disabled: var(--bone-soft);
+
+  /* Text */
+  --text-body: var(--ink);
+  --text-heading: var(--ink);
+  --text-muted: var(--ink-soft);
+  --text-faint: var(--ink-faint);
+  --text-inverse: var(--cream);
+  --text-on-nav: rgba(255, 255, 255, 0.78);
+  --text-on-nav-active: var(--white);
+  --text-link: var(--navy-700);
+  --text-link-hover: var(--navy-800);
+  --text-data: var(--ink);              /* mono metadata */
+  --text-disabled: var(--ink-faint);
+
+  /* Borders */
+  --border-subtle: var(--bone);
+  --border-strong: #ded1b9;
+  --border-nav: rgba(255, 255, 255, 0.12);
+  --border-focus: var(--navy-700);
+  --border-input: var(--bone);
+  --border-input-hover: var(--navy-300);
+
+  /* Interaction — primary */
+  --accent: var(--navy-700);
+  --accent-hover: var(--navy-800);
+  --accent-active: var(--navy-900);
+  --accent-tint: var(--tint-navy);
+  --accent-on: var(--cream);
+
+  /* Interaction — CTA. Terracotta is the exception color in the admin: it
+     marks destructive and exceptional-attention actions ONLY. On editorial
+     surfaces it is the everyday CTA. */
+  --cta: var(--navy-700);
+  --cta-hover: var(--navy-800);
+  --cta-on: var(--cream);
+
+  /* Status. Always paired with an icon or a text label — never color alone. */
+  --status-success: var(--sage);
+  --status-success-tint: var(--tint-sage);
+  --status-success-text: var(--on-sage-tint);
+  --status-warning: var(--saffron);
+  --status-warning-tint: var(--tint-saffron);
+  --status-warning-text: var(--on-saffron-tint);
+  --status-danger: var(--terracotta);
+  --status-danger-tint: var(--tint-terracotta);
+  --status-danger-text: var(--on-terracotta-tint);
+  --status-info: var(--navy-700);
+  --status-info-tint: var(--tint-navy);
+  --status-info-text: var(--on-navy-tint);
+  --status-neutral: var(--ink-soft);
+  --status-neutral-tint: var(--tint-ink);
+  --status-neutral-text: var(--ink-soft);
+
+  /* Risk. A four-step operational scale, distinct from status: it grades a
+     judgement, not a lifecycle. */
+  --risk-low: var(--sage);
+  --risk-medium: var(--saffron);
+  --risk-high: var(--terracotta);
+  --risk-critical: #8b1f00;
+
+  /* Elevation aliases */
+  --elev-card: var(--sh-sm);
+  --elev-raised: var(--sh-md);
+  --elev-overlay: var(--sh-lg);
+  --elev-dialog: var(--sh-xl);
+
+  /* Radius aliases — the admin lives at 10px */
+  --radius-control: var(--r-lg);
+  --radius-card: var(--r-lg);
+  --radius-surface: var(--r-lg);
+  --radius-chip: var(--r-pill);
+  --radius-inset: var(--r-md);
+
+  --focus-ring: 0 0 0 3px rgba(0, 51, 102, 0.28);
+  --focus-ring-danger: 0 0 0 3px rgba(193, 74, 28, 0.28);
+}
+
+[data-numu-register="editorial"] {
+  --surface-app: var(--cream-warm);
+  --surface-card: var(--paper-hi);
+  --surface-panel: var(--cream-warm-2);
+  --surface-inset: var(--cream-warm-2);
+  --surface-nav: var(--cream-warm);
+  --surface-nav-active: var(--cream-warm-2);
+  --surface-nav-hover: rgba(26, 20, 16, 0.06);
+  --surface-overlay: var(--paper-hi);
+  --surface-scrim: rgba(26, 20, 16, 0.5);
+  --surface-hover: rgba(26, 20, 16, 0.05);
+  --surface-selected: rgba(139, 37, 0, 0.09);
+  --surface-disabled: var(--cream-warm-2);
+
+  --text-body: var(--ink-warm);
+  --text-heading: var(--ink-warm);
+  --text-muted: var(--ink-warm-soft);
+  --text-faint: #8a7c6c;
+  --text-inverse: var(--cream-warm);
+  --text-on-nav: var(--ink-warm);
+  --text-on-nav-active: var(--sienna);
+  --text-link: var(--sienna);
+  --text-link-hover: var(--sienna-2);
+  --text-data: var(--ink-warm);
+  --text-disabled: #a2968a;
+
+  --border-subtle: var(--cream-warm-3);
+  --border-strong: #cdb896;
+  --border-nav: var(--cream-warm-3);
+  --border-focus: var(--sienna);
+  --border-input: var(--cream-warm-3);
+  --border-input-hover: var(--sienna);
+
+  --accent: var(--sienna);
+  --accent-hover: var(--sienna-2);
+  --accent-active: var(--sienna-2);
+  --accent-tint: rgba(139, 37, 0, 0.1);
+  --accent-on: var(--cream-warm);
+
+  --cta: var(--terracotta);
+  --cta-hover: #a63d14;
+  --cta-on: var(--cream-warm);
+
+  --status-info: var(--teal-ink);
+  --status-info-tint: rgba(31, 71, 70, 0.12);
+  --status-info-text: var(--teal-ink);
+
+  /* Editorial keeps hairlines and flat panels: radii drop to 4, shadows off. */
+  --elev-card: none;
+  --elev-raised: none;
+  --elev-overlay: var(--sh-md);
+  --radius-control: var(--r-md);
+  --radius-card: var(--r-sm);
+  --radius-surface: var(--r-sm);
+  --radius-inset: var(--r-sm);
+
+  --focus-ring: 0 0 0 3px rgba(139, 37, 0, 0.3);
+}
+
+/* Brand register — specimen sheets, wordmark plates, covers.
+   Flat, hairline, radius 2, no shadow, ever. */
+[data-numu-register="brand"] {
+  --surface-app: var(--cream);
+  --surface-card: var(--paper);
+  --surface-panel: var(--paper-hi);
+  --border-subtle: var(--bone);
+  --elev-card: none;
+  --elev-raised: none;
+  --radius-card: var(--r-xs);
+  --radius-surface: var(--r-xs);
+  --radius-control: var(--r-xs);
+}
+
+/* DARK — retargeted semantics for the admin. Navy stops being a surface and
+   becomes an accent; grounds move to a desaturated navy-black so the warm
+   accents keep their identity. Defined for completeness; light ships first. */
+[data-numu-theme="dark"],
+[data-numu-theme="dark"] [data-numu-register="admin"] {
+  --surface-app: #0b111c;
+  --surface-card: #121a29;
+  --surface-panel: #16202f;
+  --surface-inset: #0e1622;
+  --surface-nav: #0a1220;
+  --surface-nav-active: #16273d;
+  --surface-nav-hover: rgba(255, 255, 255, 0.06);
+  --surface-overlay: #16202f;
+  --surface-scrim: rgba(4, 8, 14, 0.7);
+  --surface-hover: rgba(255, 255, 255, 0.05);
+  --surface-selected: rgba(138, 165, 194, 0.14);
+  --surface-disabled: #1a2432;
+
+  --text-body: #e8eef6;
+  --text-heading: #f4f8fc;
+  --text-muted: #9aa8ba;
+  --text-faint: #6c7a8c;
+  --text-inverse: var(--ink);
+  --text-on-nav: rgba(232, 238, 246, 0.76);
+  --text-on-nav-active: #ffffff;
+  --text-link: #8aa5c2;
+  --text-link-hover: #b6c8dd;
+  --text-data: #d8e2ee;
+  --text-disabled: #5c6878;
+
+  --border-subtle: #223046;
+  --border-strong: #33455f;
+  --border-nav: rgba(255, 255, 255, 0.1);
+  --border-input: #2a3a52;
+  --border-input-hover: #3b6593;
+
+  --accent: #4d7cae;
+  --accent-hover: #6291c2;
+  --accent-active: #3b6593;
+  --accent-tint: rgba(77, 124, 174, 0.18);
+  --accent-on: #061019;
+  --cta: #4d7cae;
+  --cta-hover: #6291c2;
+  --cta-on: #061019;
+
+  --status-success: #86ad82;
+  --status-success-tint: rgba(134, 173, 130, 0.16);
+  --status-success-text: #a8ceA4;
+  --status-warning: #eeb352;
+  --status-warning-tint: rgba(238, 179, 82, 0.16);
+  --status-warning-text: #f2c67f;
+  --status-danger: #e0703c;
+  --status-danger-tint: rgba(224, 112, 60, 0.16);
+  --status-danger-text: #f0a081;
+  --status-info: #8aa5c2;
+  --status-info-tint: rgba(138, 165, 194, 0.16);
+  --status-info-text: #b6c8dd;
+  --status-neutral: #9aa8ba;
+  --status-neutral-tint: rgba(255, 255, 255, 0.07);
+  --status-neutral-text: #9aa8ba;
+
+  --risk-low: #86ad82;
+  --risk-medium: #eeb352;
+  --risk-high: #e0703c;
+  --risk-critical: #f0603c;
+
+  --viz-grid: rgba(255, 255, 255, 0.08);
+  --focus-ring: 0 0 0 3px rgba(138, 165, 194, 0.4);
+}

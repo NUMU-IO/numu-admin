@@ -1,7 +1,9 @@
 import { initCSRF } from "@/lib/csrf";
+import { registerServiceWorker } from "@/lib/serviceWorker";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createRoot } from "react-dom/client";
 import * as Sentry from "@sentry/react";
+import { toast } from "sonner";
 import App from "./App";
 import "./index.css";
 
@@ -69,4 +71,15 @@ initCSRF().finally(() => {
       <App />
     </QueryClientProvider>
   );
+
+  // After the render call, so installing the worker never competes with first
+  // paint. The update is offered rather than applied: activating silently
+  // would drop the old chunks under an operator who is mid-review.
+  registerServiceWorker((activate) => {
+    toast("A new version is ready", {
+      description: "Reload to pick it up. Nothing on this screen is lost.",
+      duration: Infinity,
+      action: { label: "Reload", onClick: activate },
+    });
+  });
 });

@@ -1,9 +1,14 @@
 /**
  * Merchant Hub Nav — platform admin page.
  *
- * Lets super-admins hide/show, mark "coming soon", or reorder each tab in
- * the merchant hub sidebar. Writes go to platform_config.merchant_hub_nav
+ * Lets super-admins hide/show, rename, mark "coming soon", or reorder each
+ * tab in the merchant hub sidebar. Writes go to platform_config.merchant_hub_nav
  * and are read on first paint by the merchant hub.
+ *
+ * A rename is an OVERRIDE and replaces both languages, because one field
+ * cannot hold two. The row keeps showing the hub's own English and Arabic
+ * names underneath so it is obvious what is being replaced, and clearing the
+ * box gives the translations back.
  */
 
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -12,6 +17,7 @@ import { DashboardLayoutSkeleton } from "@/components/DashboardLayoutSkeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import {
   Table,
@@ -99,10 +105,17 @@ export default function MerchantHubNav() {
     setDirty(true);
   };
 
+  const rename = (idx: number, label: string) => {
+    const copy = [...tabs];
+    copy[idx] = { ...copy[idx], label };
+    setTabs(copy);
+    setDirty(true);
+  };
+
   return (
     <DashboardLayout
       title="Merchant Hub Nav"
-      subtitle="Control which tabs show up in the merchant hub sidebar, mark upcoming ones as 'Coming Soon', or reorder them."
+      subtitle="Control which tabs show up in the merchant hub sidebar, rename them, mark upcoming ones as 'Coming Soon', or reorder them."
     >
       <div className="p-6 space-y-6">
         <div className="flex items-start justify-between gap-4">
@@ -151,7 +164,9 @@ export default function MerchantHubNav() {
           <CardHeader>
             <CardTitle>Tabs</CardTitle>
             <CardDescription>
-              Changes take effect the next time a merchant loads the hub.
+              Changes take effect the next time a merchant loads the hub. Leave
+              a name empty to use the hub's own translated one — a rename
+              replaces both English and Arabic.
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
@@ -160,6 +175,7 @@ export default function MerchantHubNav() {
                 <TableRow>
                   <TableHead className="w-10">#</TableHead>
                   <TableHead>Tab</TableHead>
+                  <TableHead className="w-52">Name shown to merchants</TableHead>
                   <TableHead className="w-28">Visible</TableHead>
                   <TableHead className="w-32">Coming soon</TableHead>
                   <TableHead className="w-24 text-right">Reorder</TableHead>
@@ -183,6 +199,16 @@ export default function MerchantHubNav() {
                             {label?.ar ? <span className="ms-2">· {label.ar}</span> : null}
                           </div>
                         </div>
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          value={t.label ?? ""}
+                          maxLength={32}
+                          placeholder={label?.en ?? t.key}
+                          onChange={(e) => rename(idx, e.target.value)}
+                          aria-label={`Rename ${label?.en ?? t.key}`}
+                          className="h-8"
+                        />
                       </TableCell>
                       <TableCell>
                         <Switch

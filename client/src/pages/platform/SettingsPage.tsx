@@ -180,16 +180,11 @@ export default function PlatformSettingsPage() {
   };
 
   return (
-    <DashboardLayout title="Platform settings">
-      <div className="p-6 max-w-3xl space-y-6">
-        <div>
-          <h1 className="text-2xl font-semibold">Platform settings</h1>
-          <p className="text-sm text-muted-foreground">
-            Platform-wide defaults that apply to NEW stores only. Existing
-            stores keep whatever theme they currently have — switching
-            this default does not migrate them.
-          </p>
-        </div>
+    <DashboardLayout
+      title="Platform settings"
+      subtitle="Defaults for new stores only. Changing one never migrates an existing store."
+    >
+      <div className="ak-stack" style={{ maxWidth: 760 }}>
 
         <Card>
           <CardHeader>
