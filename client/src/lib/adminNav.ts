@@ -166,6 +166,12 @@ export const ADMIN_NAV: AdminNavSection[] = [
         href: "/platform/capabilities",
       },
       {
+        id: "security",
+        label: "Security (2FA)",
+        icon: "shieldAlert",
+        href: "/security",
+      },
+      {
         id: "hub-nav",
         label: "Merchant hub nav",
         icon: "toggleLeft",
