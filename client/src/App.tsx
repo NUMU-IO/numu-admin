@@ -32,6 +32,7 @@ import MarketplaceReview from "./pages/MarketplaceReview";
 import WalletAdmin from "./pages/WalletAdmin";
 import SubscriptionPayments from "./pages/SubscriptionPayments";
 import WhatsappAccessRequests from "./pages/WhatsappAccessRequests";
+import Partners from "./pages/Partners";
 import ThemesPage from "./pages/marketplace/ThemesPage";
 import ThemeDetailPage from "./pages/marketplace/ThemeDetailPage";
 import StoreSnapshotsPage from "./pages/marketplace/StoreSnapshotsPage";
@@ -164,6 +165,9 @@ function Router() {
       </Route>
       <Route path="/whatsapp-access">
         {() => <ProtectedRoute component={WhatsappAccessRequests} />}
+      </Route>
+      <Route path="/apps/partners">
+        {() => <ProtectedRoute component={Partners} />}
       </Route>
       <Route path="/wallets">
         {() => <ProtectedRoute component={WalletAdmin} />}

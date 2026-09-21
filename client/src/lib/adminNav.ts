@@ -151,6 +151,14 @@ export const ADMIN_NAV: AdminNavSection[] = [
     ],
   },
   {
+    // Apps plan (docs/Plans/apps-developer-work/05-SURFACES.md § 1). App
+    // review, App catalog and Webhook health join this section in Phases 3-4.
+    label: "Apps & Partners",
+    items: [
+      { id: "partners", label: "Partners", icon: "plug", href: "/apps/partners" },
+    ],
+  },
+  {
     label: "Platform",
     items: [
       {
