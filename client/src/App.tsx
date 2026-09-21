@@ -33,6 +33,8 @@ import WalletAdmin from "./pages/WalletAdmin";
 import SubscriptionPayments from "./pages/SubscriptionPayments";
 import WhatsappAccessRequests from "./pages/WhatsappAccessRequests";
 import Partners from "./pages/Partners";
+import AppReview from "./pages/AppReview";
+import AppCatalog from "./pages/AppCatalog";
 import ThemesPage from "./pages/marketplace/ThemesPage";
 import ThemeDetailPage from "./pages/marketplace/ThemeDetailPage";
 import StoreSnapshotsPage from "./pages/marketplace/StoreSnapshotsPage";
@@ -168,6 +170,12 @@ function Router() {
       </Route>
       <Route path="/apps/partners">
         {() => <ProtectedRoute component={Partners} />}
+      </Route>
+      <Route path="/apps/review">
+        {() => <ProtectedRoute component={AppReview} />}
+      </Route>
+      <Route path="/apps/catalog">
+        {() => <ProtectedRoute component={AppCatalog} />}
       </Route>
       <Route path="/wallets">
         {() => <ProtectedRoute component={WalletAdmin} />}
