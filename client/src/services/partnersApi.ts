@@ -79,6 +79,9 @@ export interface LedgerEntry {
   platform_fee_cents: number | null;
   currency: string;
   app_id: string | null;
+  /** Added by NUMU-api #656; null on payouts and adjustments, which have no app. */
+  app_name?: string | null;
+  app_slug?: string | null;
   reference: string | null;
   note: string | null;
   created_at: string;

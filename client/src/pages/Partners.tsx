@@ -237,6 +237,7 @@ const LEDGER_COLUMNS: DataTableColumn<LedgerEntry>[] = [
     },
   },
   { key: "amount_cents", header: "Amount", align: "end", mono: true, render: (e) => signedMoney(e.amount_cents, e.currency) },
+  { key: "app_name", header: "App", render: (e) => e.app_name ?? "—" },
   { key: "reference", header: "Reference", mono: true, render: (e) => e.reference ?? "—" },
   {
     key: "note",
