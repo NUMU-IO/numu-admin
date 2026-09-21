@@ -62,14 +62,14 @@ async function rawFetch(
 
 /** The API's error text: `detail` (FastAPI default) or its `error.message`
  *  envelope, which is what NUMU-api actually sends. */
-function errorText(body: unknown, status: number): string {
+export function errorText(body: unknown, status: number): string {
   const b = body as { detail?: unknown; error?: { message?: unknown } } | null;
   const text = b?.detail ?? b?.error?.message;
   return typeof text === "string" ? text : `API error: ${status}`;
 }
 
 /** A 403 from `require_admin_2fa`: not enrolled, or the step-up is stale. */
-const STEP_UP_REQUIRED = /2FA (required|verification)/i;
+export const STEP_UP_REQUIRED = /2FA (required|verification)/i;
 
 /**
  * Registered by <TwoFactorStepUp />: asks the admin for a code, verifies it,
@@ -79,6 +79,20 @@ const STEP_UP_REQUIRED = /2FA (required|verification)/i;
 let stepUpHandler: ((reason: string) => Promise<boolean>) | null = null;
 export function setStepUpHandler(fn: ((reason: string) => Promise<boolean>) | null) {
   stepUpHandler = fn;
+}
+
+/**
+ * True when a 403 is a 2FA step-up the admin just completed, so the caller
+ * may retry once. Shared by both API clients (`services/api.ts` too), or a
+ * gated call made through the other client would dead-end on the 403.
+ */
+export async function stepUpPassed(endpoint: string, reason: string): Promise<boolean> {
+  return (
+    STEP_UP_REQUIRED.test(reason) &&
+    stepUpHandler !== null &&
+    !endpoint.startsWith("/admin/auth/2fa/") &&
+    (await stepUpHandler(reason))
+  );
 }
 
 export async function apiClient<T>(
@@ -94,12 +108,7 @@ export async function apiClient<T>(
     if (body?.detail === "CSRF validation failed") {
       await initCSRF();
       res = await rawFetch(endpoint, options);
-    } else if (
-      STEP_UP_REQUIRED.test(reason) &&
-      stepUpHandler &&
-      !endpoint.startsWith("/admin/auth/2fa/") &&
-      (await stepUpHandler(reason))
-    ) {
+    } else if (await stepUpPassed(endpoint, reason)) {
       res = await rawFetch(endpoint, options);
     } else {
       throw new Error(reason);
