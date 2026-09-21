@@ -13,7 +13,7 @@
 
 import { describe, expect, it } from "vitest";
 import { ADMIN_NAV, navIdForPath, navTrailForPath } from "./adminNav";
-import { formatCompact, formatMoney, formatMoneyShort, formatNumber } from "./format";
+import { formatCompact, formatMoney, formatMoneyShort, formatNumber, parseMoney } from "./format";
 
 describe("navIdForPath", () => {
   it("lights Overview only on the root", () => {
@@ -81,6 +81,17 @@ describe("money", () => {
   it("treats null as zero rather than NaN", () => {
     expect(formatMoney(null)).toContain("0.00");
     expect(formatNumber(undefined)).toBe("0");
+  });
+
+  it("parses typed EGP into exact piasters", () => {
+    expect(parseMoney("1250.5")).toBe(125_050);
+    expect(parseMoney("0.29")).toBe(29); // 0.29 * 100 is 28.999… as a float
+    expect(parseMoney(" -79.20 ")).toBe(-7_920);
+    expect(parseMoney("99.")).toBe(9_900);
+    expect(parseMoney("-0")).toBe(0);
+    for (const bad of ["", "-", ".5", "1,250", "1.005", "1e3", "EGP 5", "٥", "99999999999999999"]) {
+      expect(parseMoney(bad)).toBeNull();
+    }
   });
 });
 

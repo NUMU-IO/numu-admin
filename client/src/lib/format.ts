@@ -48,6 +48,20 @@ export function formatMoneyShort(
   return money(currency, 0).format((minorUnits ?? 0) / 100);
 }
 
+/**
+ * Typed EGP → integer piasters: "1250.5" → 125050, "-79.20" → -7920.
+ * Parses the digits instead of multiplying a float, so no amount drifts by a
+ * piaster. Null unless it is an optional minus, digits, and at most two
+ * decimals — no commas, so "1,5" can't silently mean 15.
+ */
+export function parseMoney(text: string): number | null {
+  const m = /^(-?)(\d+)(?:\.(\d{0,2}))?$/.exec(text.trim());
+  if (!m) return null;
+  const cents = Number(m[2]) * 100 + Number((m[3] ?? "").padEnd(2, "0"));
+  if (!Number.isSafeInteger(cents)) return null;
+  return m[1] ? 0 - cents : cents;
+}
+
 /** Signed percentage for a MetricCard delta. Returns undefined at zero. */
 export function formatDelta(pct: number | null | undefined): string | undefined {
   if (pct == null || pct === 0) return undefined;
