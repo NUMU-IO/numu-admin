@@ -18,6 +18,7 @@
 
 import { getCSRFToken, initCSRF } from "./csrf";
 
+import { errorText, stepUpPassed } from "@/lib/apiClient";
 import { getApiBase } from "@/lib/env";
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS", "TRACE"]);
@@ -94,11 +95,16 @@ export async function apiClient<T>(
   // Handle CSRF token expiry: refresh token and retry once
   if (res.status === 403) {
     const body = await res.json().catch(() => null);
+    const reason = errorText(body, res.status);
     if (body?.detail === "CSRF validation failed") {
       await initCSRF();
       res = await rawFetch(endpoint, options);
+    } else if (await stepUpPassed(endpoint, reason)) {
+      // The same 2FA step-up prompt as lib/apiClient: platform capabilities,
+      // theme review and the other services on this client are gated too.
+      res = await rawFetch(endpoint, options);
     } else {
-      throw new Error(body?.detail || `API error: ${res.status}`);
+      throw new Error(reason);
     }
   }
 
@@ -124,7 +130,7 @@ export async function apiClient<T>(
 
   if (!res.ok) {
     const body = await res.json().catch(() => null);
-    throw new Error(body?.detail || `API error: ${res.status}`);
+    throw new Error(errorText(body, res.status));
   }
 
   if (res.status === 204) {

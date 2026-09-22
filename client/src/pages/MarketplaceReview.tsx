@@ -66,7 +66,7 @@ import { toast } from "sonner";
 
 interface ReviewCardProps {
   version: PendingThemeVersion;
-  onAct: (decision: ReviewDecision, notes?: string) => void;
+  onAct: (decision: ReviewDecision, notes?: string, override?: boolean) => void;
   pending: boolean;
 }
 
@@ -75,6 +75,10 @@ function ReviewCard({ version, onAct, pending }: ReviewCardProps) {
     null,
   );
   const [notes, setNotes] = useState("");
+  // The API refuses to publish a version whose certification lint did not
+  // pass unless the reviewer overrides it on purpose.
+  const lintPassed = version.lint_status === "passed";
+  const [override, setOverride] = useState(false);
 
   const submittedAt = new Date(version.submitted_at);
 
@@ -173,11 +177,33 @@ function ReviewCard({ version, onAct, pending }: ReviewCardProps) {
           )}
         </div>
 
+        <div className="text-xs space-y-1.5">
+          <p>
+            <span className="font-semibold">Certification:</span>{" "}
+            <Badge variant={lintPassed ? "secondary" : "destructive"}>
+              {version.lint_status ?? "not run"}
+            </Badge>
+            {version.certification_tier && (
+              <span className="text-muted-foreground"> · tier {version.certification_tier}</span>
+            )}
+          </p>
+          {!lintPassed && (
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={override}
+                onChange={(e) => setOverride(e.target.checked)}
+              />
+              Override certification (recorded in the review notes)
+            </label>
+          )}
+        </div>
+
         <div className="flex flex-wrap gap-2 pt-1">
           <Button
             size="sm"
-            onClick={() => onAct("approve")}
-            disabled={pending}
+            onClick={() => onAct("approve", undefined, !lintPassed && override)}
+            disabled={pending || (!lintPassed && !override)}
             className="bg-green-600 hover:bg-green-700"
           >
             {pending ? (
@@ -276,11 +302,13 @@ export default function MarketplaceReview() {
       versionId,
       decision,
       notes,
+      override,
     }: {
       versionId: string;
       decision: ReviewDecision;
       notes?: string;
-    }) => reviewVersion(versionId, { decision, notes }),
+      override?: boolean;
+    }) => reviewVersion(versionId, { decision, notes, override_certification: override || undefined }),
     onMutate: ({ versionId }) => setActingId(versionId),
     onSettled: () => setActingId(null),
     onSuccess: (data) => {
@@ -376,11 +404,12 @@ export default function MarketplaceReview() {
               key={v.version_id}
               version={v}
               pending={reviewMutation.isPending && actingId === v.version_id}
-              onAct={(decision, notes) =>
+              onAct={(decision, notes, override) =>
                 reviewMutation.mutate({
                   versionId: v.version_id,
                   decision,
                   notes,
+                  override,
                 })
               }
             />
