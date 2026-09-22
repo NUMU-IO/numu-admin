@@ -104,6 +104,12 @@ export const ADMIN_NAV: AdminNavSection[] = [
         queueKey: "whatsappAccess",
       },
       {
+        id: "api-tokens",
+        label: "API tokens",
+        icon: "plug",
+        href: "/api-tokens",
+      },
+      {
         id: "support-cases",
         label: "Support cases",
         icon: "inbox",
