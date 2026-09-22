@@ -33,6 +33,7 @@ import WalletAdmin from "./pages/WalletAdmin";
 import SubscriptionPayments from "./pages/SubscriptionPayments";
 import WhatsappAccessRequests from "./pages/WhatsappAccessRequests";
 import ApiTokens from "./pages/ApiTokens";
+import Partners from "./pages/Partners";
 import ThemesPage from "./pages/marketplace/ThemesPage";
 import ThemeDetailPage from "./pages/marketplace/ThemeDetailPage";
 import StoreSnapshotsPage from "./pages/marketplace/StoreSnapshotsPage";
@@ -168,6 +169,9 @@ function Router() {
       </Route>
       <Route path="/api-tokens">
         {() => <ProtectedRoute component={ApiTokens} />}
+      </Route>
+      <Route path="/apps/partners">
+        {() => <ProtectedRoute component={Partners} />}
       </Route>
       <Route path="/wallets">
         {() => <ProtectedRoute component={WalletAdmin} />}
