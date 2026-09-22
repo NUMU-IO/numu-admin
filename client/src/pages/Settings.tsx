@@ -50,6 +50,8 @@ import {
   Building2,
   Copy,
   CreditCard,
+  Eye,
+  EyeOff,
   Globe,
   Key,
   Loader2,
@@ -227,6 +229,7 @@ export default function Settings() {
     enabled: isAuthenticated,
   });
   const [metaDraft, setMetaDraft] = useState<MetaCredentials | null>(null);
+  const [showWebhookToken, setShowWebhookToken] = useState(false);
   if (metaDraft === null && metaQuery.data) {
     setMetaDraft({
       ...metaQuery.data,
@@ -276,6 +279,20 @@ export default function Settings() {
       "meta_webhook_verify_token",
       Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join(""),
     );
+    setShowWebhookToken(true);
+  };
+  const copyWebhookToken = async () => {
+    if (!meta.meta_webhook_verify_token) {
+      toast.error("Generate a new token first. Saved tokens cannot be revealed.");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(meta.meta_webhook_verify_token);
+      toast.success("Webhook verify token copied");
+    } catch {
+      toast.error("Copy failed — show the token and copy it manually");
+      setShowWebhookToken(true);
+    }
   };
 
   // Notification settings state
@@ -968,11 +985,17 @@ export default function Settings() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="webhookVerifyToken" className="flex items-center gap-2">Webhook Verify Token {metaQuery.data?.meta_webhook_verify_token && <Badge variant="secondary">Configured</Badge>}</Label>
-                  <div className="flex gap-2">
-                    <Input id="webhookVerifyToken" type="password" autoComplete="new-password" value={meta.meta_webhook_verify_token} onChange={(e) => setMetaField("meta_webhook_verify_token", e.target.value)} placeholder={metaQuery.data?.meta_webhook_verify_token ? "Leave blank to keep current token" : "Generate a secure token"} />
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <div className="relative min-w-0 flex-1">
+                      <Input id="webhookVerifyToken" className="pr-10" type={showWebhookToken ? "text" : "password"} autoComplete="new-password" value={meta.meta_webhook_verify_token} onChange={(e) => setMetaField("meta_webhook_verify_token", e.target.value)} placeholder={metaQuery.data?.meta_webhook_verify_token ? "Saved securely — generate a replacement to copy" : "Generate a secure token"} />
+                      <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2" onClick={() => setShowWebhookToken((shown) => !shown)} disabled={!meta.meta_webhook_verify_token} aria-label={showWebhookToken ? "Hide webhook token" : "Show webhook token"}>
+                        {showWebhookToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                    <Button type="button" variant="outline" onClick={copyWebhookToken} disabled={!meta.meta_webhook_verify_token}><Copy className="mr-2 h-4 w-4" />Copy</Button>
                     <Button type="button" variant="outline" onClick={generateWebhookToken}>Generate</Button>
                   </div>
-                  <p className="text-xs text-muted-foreground">Use this exact value in Meta's webhook Verify token field.</p>
+                  <p className="text-xs text-muted-foreground">Generate, copy, then save. Existing saved tokens stay encrypted and cannot be displayed again.</p>
                 </div>
               </div>
               <Separator />
