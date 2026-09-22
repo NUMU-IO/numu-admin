@@ -9,6 +9,9 @@
  * The kill switch takes every Partner App out of the catalog and off every
  * storefront at once (the storefront payload cache means up to ~2 minutes).
  * NUMU Apps are untouched.
+ *
+ * NUMU Apps are priced here (free or recurring, 2FA). A Partner App's price
+ * comes from its reviewed manifest, so it has no editor.
  */
 
 import DashboardLayout from "@/components/DashboardLayout";
@@ -19,16 +22,20 @@ import {
   Dialog,
   EmptyState,
   FormField,
+  Input,
   KeyValue,
+  Select,
   Skeleton,
   StatusBadge,
   Switch,
   Textarea,
   type StatusBadgeProps,
 } from "@/ds";
+import { formatMoney, parseMoney } from "@/lib/format";
 import {
   getKillSwitch,
   listCatalog,
+  setAppPricing,
   setKillSwitch,
   setListingFlags,
   suspendApp,
@@ -82,7 +89,117 @@ function KillSwitchCard() {
   );
 }
 
-function AppCard({ app, onSuspend }: { app: CatalogRow; onSuspend: () => void }) {
+/** EGP 5 to EGP 100,000 per cycle, as the API validates it. */
+const MIN_PRICE = 500;
+const MAX_PRICE = 10_000_000;
+
+/**
+ * NUMU App price. Starts from the current price when the catalog carries
+ * it; otherwise nothing is preselected, so a save is always a deliberate
+ * choice rather than a default.
+ */
+function PricingDialog({ app, onClose }: { app: CatalogRow; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const current = app.pricing;
+  const [model, setModel] = useState(current?.plan === "free" || current?.plan === "recurring" ? current.plan : "");
+  const [price, setPrice] = useState(current?.price_cents ? (current.price_cents / 100).toFixed(2) : "");
+  const [cycle, setCycle] = useState<"monthly" | "annual">(current?.cycle ?? "monthly");
+  const cents = parseMoney(price);
+  const priceError = !price.trim()
+    ? undefined
+    : cents === null
+      ? "Digits with up to 2 decimals, e.g. 99 or 99.50"
+      : cents < MIN_PRICE || cents > MAX_PRICE
+        ? "Between EGP 5 and EGP 100,000"
+        : undefined;
+  const ready = model === "free" || (model === "recurring" && cents !== null && !priceError);
+  const save = useMutation({
+    mutationFn: () =>
+      setAppPricing(app.id, model === "recurring" ? { model, price_cents: cents ?? 0, cycle } : { model: "free" }),
+    onSuccess: (pricing) => {
+      toast.success(`${app.name}: ${pricing.locales.en?.label ?? pricing.plan}`, {
+        description: "New subscriptions pay this price. Recorded in the audit log against your account",
+      });
+      void queryClient.invalidateQueries({ queryKey: ["app-catalog", "list"] });
+      onClose();
+    },
+    onError,
+  });
+
+  return (
+    <Dialog
+      title={`Price ${app.name}`}
+      description="Recurring prices are charged to the merchant's NUMU wallet every cycle. Subscribers keep the price they subscribed at; a new price applies to new subscriptions and to re-subscribing after a lapse."
+      onClose={onClose}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button variant="primary" disabled={!ready} loading={save.isPending} onClick={() => save.mutate()}>
+            Save price
+          </Button>
+        </>
+      }
+    >
+      <FormField label="Model" required htmlFor="app-price-model" hint={current ? `Now: ${current.locales.en?.label ?? current.plan}` : undefined}>
+        <Select
+          id="app-price-model"
+          placeholder="Choose…"
+          value={model}
+          onChange={(e) => setModel(e.target.value)}
+          options={[
+            { value: "free", label: "Free" },
+            { value: "recurring", label: "Recurring" },
+          ]}
+        />
+      </FormField>
+      {model === "recurring" ? (
+        <>
+          <FormField
+            label="Price per cycle"
+            required
+            htmlFor="app-price"
+            error={priceError}
+            hint={
+              cents !== null && !priceError
+                ? `${formatMoney(cents)} per ${cycle === "annual" ? "year" : "month"}`
+                : "EGP 5 to EGP 100,000"
+            }
+          >
+            <Input
+              id="app-price"
+              dir="ltr"
+              numeric
+              affix="EGP"
+              inputMode="decimal"
+              autoComplete="off"
+              placeholder="99.00"
+              // The affix is absolutely placed; without this an end-aligned amount runs under "EGP".
+              style={{ paddingInlineEnd: 48 }}
+              value={price}
+              error={!!priceError}
+              onChange={(e) => setPrice(e.target.value)}
+            />
+          </FormField>
+          <FormField label="Cycle" required htmlFor="app-price-cycle">
+            <Select
+              id="app-price-cycle"
+              value={cycle}
+              onChange={(e) => setCycle(e.target.value as "monthly" | "annual")}
+              options={[
+                { value: "monthly", label: "Monthly (30 days)" },
+                { value: "annual", label: "Annual (365 days)" },
+              ]}
+            />
+          </FormField>
+        </>
+      ) : null}
+    </Dialog>
+  );
+}
+
+function AppCard({ app, onSuspend, onPrice }: { app: CatalogRow; onSuspend: () => void; onPrice: () => void }) {
   const queryClient = useQueryClient();
   const flags = useMutation({
     mutationFn: (next: CatalogRow["listing_flags"]) => setListingFlags(app.id, next),
@@ -110,15 +227,22 @@ function AppCard({ app, onSuspend }: { app: CatalogRow; onSuspend: () => void })
         </div>
       }
       footer={
-        app.status === "suspended" ? (
-          <Button size="sm" variant="primary" icon="refresh" loading={reinstate.isPending} onClick={() => reinstate.mutate()}>
-            Reinstate
-          </Button>
-        ) : (
-          <Button size="sm" variant="outline" icon="slash" onClick={onSuspend}>
-            Suspend app
-          </Button>
-        )
+        <div className="ak-cell-line">
+          {app.status === "suspended" ? (
+            <Button size="sm" variant="primary" icon="refresh" loading={reinstate.isPending} onClick={() => reinstate.mutate()}>
+              Reinstate
+            </Button>
+          ) : (
+            <Button size="sm" variant="outline" icon="slash" onClick={onSuspend}>
+              Suspend app
+            </Button>
+          )}
+          {app.first_party ? (
+            <Button size="sm" variant="subtle" icon="tag" onClick={onPrice}>
+              Pricing
+            </Button>
+          ) : null}
+        </div>
       }
     >
       <KeyValue
@@ -127,6 +251,7 @@ function AppCard({ app, onSuspend }: { app: CatalogRow; onSuspend: () => void })
           { label: "Version", value: app.version, mono: true },
           { label: "Category", value: app.category ?? "—" },
           { label: "Installs (active / total)", value: `${app.installs_active} / ${app.installs_total}`, mono: true },
+          ...(app.pricing ? [{ label: "Price", value: app.pricing.locales.en?.label ?? app.pricing.plan }] : []),
         ]}
       />
       <div className="space-y-1 mt-3">
@@ -150,6 +275,7 @@ export default function AppCatalog() {
   const queryClient = useQueryClient();
   const list = useQuery({ queryKey: ["app-catalog", "list"], queryFn: listCatalog });
   const [suspending, setSuspending] = useState<CatalogRow | null>(null);
+  const [pricing, setPricing] = useState<CatalogRow | null>(null);
   const [reason, setReason] = useState("");
   const suspend = useMutation({
     mutationFn: (app: CatalogRow) => suspendApp(app.id, { suspend: true, reason: reason.trim() }),
@@ -187,9 +313,12 @@ export default function AppCatalog() {
               setReason("");
               setSuspending(app);
             }}
+            onPrice={() => setPricing(app)}
           />
         ))}
       </div>
+
+      {pricing ? <PricingDialog app={pricing} onClose={() => setPricing(null)} /> : null}
 
       <Dialog
         open={suspending !== null}

@@ -29,7 +29,7 @@ import {
   Textarea,
   type KeyValueItem,
 } from "@/ds";
-import { formatDateTime } from "@/lib/format";
+import { formatDateTime, formatMoney } from "@/lib/format";
 import {
   getVersion,
   listReviewQueue,
@@ -47,8 +47,21 @@ const CHANGE: Record<AppChangeType, { label: string; tone: "danger" | "warning" 
   new_app: { label: "New app", tone: "info" },
   new_scopes: { label: "New scopes", tone: "danger" },
   urls: { label: "URLs changed", tone: "warning" },
+  pricing: { label: "Price changed", tone: "warning" },
   listing_only: { label: "Listing only", tone: "neutral" },
 };
+
+/**
+ * What the manifest charges, next to what its listing says, so a reviewer
+ * can tick `price_matches`: "EGP 99.00 / month", "free", "external: …".
+ */
+function priceText(p: AppManifest["pricing"] | undefined): string {
+  if (!p) return "—";
+  const label = p.label?.en ? ` (listing: ${p.label.en})` : "";
+  if (p.model === "recurring") return `${formatMoney(p.price_cents)} / ${p.cycle === "annual" ? "year" : "month"}${label}`;
+  if (p.model === "external") return `external${label || " (billed by the partner)"}`;
+  return p.model;
+}
 
 function onError(err: unknown) {
   if (is2FAError(err)) {
@@ -132,6 +145,8 @@ function VersionPanel({ versionId, onDone }: { versionId: string; onDone: () => 
   const added = Array.from(scopes(m)).filter((s) => !scopes(d.published_manifest).has(s));
   const allTicked = Object.keys(d.checklist).every((k) => checks[k]);
   const notesOk = notesAr.trim().length > 0 && notesEn.trim().length > 0;
+  const price = priceText(m.pricing);
+  const livePrice = d.published_manifest ? priceText(d.published_manifest.pricing) : price;
 
   const contract: KeyValueItem[] = [
     { label: "App URL", value: m.app_url, mono: true },
@@ -141,7 +156,7 @@ function VersionPanel({ versionId, onDone }: { versionId: string; onDone: () => 
     { label: "Webhooks", value: m.webhooks.map((w) => `${w.event} → ${w.url}`).join("\n"), mono: true },
     { label: "Privacy policy", value: m.developer.privacy_policy_url ?? "—", mono: true },
     { label: "Support", value: m.developer.support_email, mono: true },
-    { label: "Category / price", value: `${m.category} · ${m.pricing.model}` },
+    { label: "Category / price", value: `${m.category} · ${price}${livePrice !== price ? ` (live: ${livePrice})` : ""}` },
     { label: "Settings fields", value: String(m.settings_schema.length) },
     { label: "Submitted", value: d.submitted_at ? formatDateTime(d.submitted_at) : "—", mono: true },
   ];

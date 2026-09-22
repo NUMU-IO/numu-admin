@@ -13,32 +13,53 @@
  * decision needs the 2FA step-up and is written to audit_logs. The program
  * itself is dark until opened with the switch at the top: while it is closed
  * every partner-facing route 404s, but this queue still works.
+ *
+ * Paid apps (Phase 7): the second switch lets partners sell recurring apps
+ * through NUMU billing, and stays off until counsel signs off. Each approved
+ * or suspended partner has a Ledger: what NUMU owes them, and the forms that
+ * record a bank transfer already sent (payout) or a signed correction
+ * (adjustment). No money moves from this page.
  */
 
 import DashboardLayout from "@/components/DashboardLayout";
 import {
+  Badge,
+  Banner,
   Button,
   Card,
+  ConfirmDialog,
+  DataTable,
   Dialog,
+  Drawer,
   EmptyState,
   FormField,
+  Input,
   KeyValue,
+  MetricCard,
+  Select,
   Skeleton,
   StatusBadge,
   Tabs,
   Textarea,
+  type DataTableColumn,
   type KeyValueItem,
   type StatusBadgeProps,
 } from "@/ds";
-import { formatDateTime } from "@/lib/format";
+import { formatDateTime, formatMoney, parseMoney } from "@/lib/format";
 import { is2FAError } from "@/services/platformCapabilitiesApi";
 import {
   decidePartner,
+  getLedger,
+  getPartnerBilling,
   getProgram,
   listPartners,
+  recordAdjustment,
+  recordPayout,
+  setPartnerBilling,
   setProgram,
   suspendPartner,
   type AdminPartner,
+  type LedgerEntry,
   type PartnerStatus,
 } from "@/services/partnersApi";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -114,18 +135,372 @@ function ProgramSwitch() {
   );
 }
 
+/** Shown on the card and again in the confirmation, word for word. */
+const BILLING_GATE =
+  "Turn this on only after counsel signs off on VAT, e-invoicing, withholding tax and the " +
+  "collect-and-pay-out structure, and NUMU has announced in writing that billing is live " +
+  "(draft Partner Agreement § 11.1).";
+
+function BillingSwitch() {
+  const queryClient = useQueryClient();
+  const billing = useQuery({ queryKey: ["partners", "billing"], queryFn: getPartnerBilling });
+  const [confirming, setConfirming] = useState(false);
+  const toggle = useMutation({
+    mutationFn: (enabled: boolean) => setPartnerBilling(enabled),
+    onSuccess: (state) => {
+      toast.success(state.enabled ? "NUMU billing for Partner Apps is on" : "NUMU billing for Partner Apps is off", {
+        description: "Recorded in the audit log against your account",
+      });
+      void queryClient.invalidateQueries({ queryKey: ["partners", "billing"] });
+    },
+    onError,
+  });
+  const enabled = billing.data?.enabled ?? false;
+  return (
+    <>
+      <Card
+        title="NUMU billing for Partner Apps"
+        actions={billing.data ? <StatusBadge status={enabled ? "active" : "archived"} label={enabled ? "On" : "Off"} /> : null}
+        footer={
+          <Button
+            size="sm"
+            variant={enabled ? "outline" : "danger-outline"}
+            loading={toggle.isPending}
+            disabled={!billing.data}
+            onClick={() => (enabled ? toggle.mutate(false) : setConfirming(true))}
+          >
+            {enabled ? "Turn billing off" : "Turn billing on…"}
+          </Button>
+        }
+      >
+        <div className="space-y-3">
+          <p className="text-muted-foreground">
+            {billing.isError
+              ? `The switch failed to load: ${billing.error instanceof Error ? billing.error.message : "request failed"}`
+              : enabled
+                ? "On: partners may sell apps with a recurring price. Merchants pay from their NUMU wallet every cycle; NUMU keeps 20% and owes the partner 80%."
+                : "Off: partners may publish only free or external apps. NUMU Apps can be priced at any time in the App catalog."}
+          </p>
+          <Banner tone="warning" icon="alertTriangle" title="Legal gate">
+            {BILLING_GATE}
+          </Banner>
+        </div>
+      </Card>
+      {confirming ? (
+        <ConfirmDialog
+          title="Turn on NUMU billing for Partner Apps?"
+          consequences={[
+            "Partners can sell apps with a recurring price once App review approves them.",
+            "Merchants who subscribe are charged from their NUMU wallet every cycle. NUMU keeps 20% and owes the partner 80%, paid out by bank transfer.",
+            "Turning billing off later stops new recurring apps; existing subscriptions keep renewing.",
+          ]}
+          confirmPhrase="counsel signed off"
+          confirmLabel="Turn billing on"
+          onClose={() => setConfirming(false)}
+          onConfirm={() => {
+            setConfirming(false);
+            toggle.mutate(true);
+          }}
+        >
+          <Banner tone="warning" icon="alertTriangle" title="Legal gate">
+            {BILLING_GATE}
+          </Banner>
+        </ConfirmDialog>
+      ) : null}
+    </>
+  );
+}
+
+const KIND: Record<string, { label: string; tone: "success" | "info" | "warning" | "neutral" }> = {
+  sale: { label: "Sale", tone: "success" },
+  payout: { label: "Payout", tone: "info" },
+  adjustment: { label: "Adjustment", tone: "warning" },
+};
+
+/** "+EGP 79.20" / "-EGP 79.20": ledger amounts are signed. */
+function signedMoney(cents: number, currency = "EGP"): string {
+  return `${cents > 0 ? "+" : ""}${formatMoney(cents, currency)}`;
+}
+
+const LEDGER_COLUMNS: DataTableColumn<LedgerEntry>[] = [
+  { key: "created_at", header: "When", mono: true, render: (e) => formatDateTime(e.created_at) },
+  {
+    key: "kind",
+    header: "Kind",
+    render: (e) => {
+      const k = KIND[e.kind] ?? { label: e.kind, tone: "neutral" };
+      return (
+        <Badge tone={k.tone} square>
+          {k.label}
+        </Badge>
+      );
+    },
+  },
+  { key: "amount_cents", header: "Amount", align: "end", mono: true, render: (e) => signedMoney(e.amount_cents, e.currency) },
+  { key: "app_name", header: "App", render: (e) => e.app_name ?? "—" },
+  { key: "reference", header: "Reference", mono: true, render: (e) => e.reference ?? "—" },
+  {
+    key: "note",
+    header: "Detail",
+    render: (e) =>
+      e.kind === "sale"
+        ? `Merchant paid ${formatMoney(e.gross_cents, e.currency)}; NUMU kept ${formatMoney(e.platform_fee_cents, e.currency)}`
+        : (e.note ?? "—"),
+  },
+];
+
+type EntryKind = "payout" | "adjustment";
+type Draft = { kind: EntryKind; amount_cents: number; reference: string; note: string };
+
+/**
+ * What NUMU owes one partner, and the two ways an admin changes it. Both
+ * only write the ledger: a payout records a bank transfer already sent, an
+ * adjustment corrects the balance (a merchant's refund is a separate wallet
+ * adjustment on Merchant wallets).
+ */
+function LedgerDrawer({ partner, onClose }: { partner: AdminPartner; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const ledger = useQuery({ queryKey: ["partners", "ledger", partner.id], queryFn: () => getLedger(partner.id) });
+  const [kind, setKind] = useState<EntryKind>("payout");
+  const [amount, setAmount] = useState("");
+  const [reference, setReference] = useState("");
+  const [note, setNote] = useState("");
+  const [draft, setDraft] = useState<Draft | null>(null);
+
+  const record = useMutation({
+    mutationFn: (d: Draft) =>
+      d.kind === "payout"
+        ? recordPayout(partner.id, { amount_cents: d.amount_cents, reference: d.reference, ...(d.note ? { note: d.note } : {}) })
+        : recordAdjustment(partner.id, { amount_cents: d.amount_cents, reference: d.reference, note: d.note }),
+    onSuccess: (res, d) => {
+      toast.success(`${d.kind === "payout" ? "Payout" : "Adjustment"} ${d.reference} recorded`, {
+        description: `NUMU now owes ${partner.display_name} ${formatMoney(res.balance_cents)}. Recorded in the audit log against your account`,
+      });
+      setAmount("");
+      setReference("");
+      setNote("");
+      void queryClient.invalidateQueries({ queryKey: ["partners", "ledger", partner.id] });
+    },
+    onError,
+  });
+
+  const data = ledger.data;
+  const cents = parseMoney(amount);
+  const amountError = !amount.trim()
+    ? undefined
+    : cents === null
+      ? "Digits with up to 2 decimals, e.g. 1250.50"
+      : cents === 0
+        ? "Can't be zero"
+        : kind === "payout" && cents < 0
+          ? "A payout is a positive amount"
+          : kind === "payout" && data && cents > data.payable_cents
+            ? `More than is payable now (${formatMoney(data.payable_cents)})`
+            : undefined;
+  const ref = reference.trim();
+  const text = note.trim();
+  const ready = !!data && cents !== null && !amountError && ref.length >= 3 && (kind === "payout" || text.length >= 3);
+  const payout = kind === "payout";
+
+  return (
+    <>
+      <Drawer
+        title={`Ledger · ${partner.display_name}`}
+        subtitle={partner.id}
+        width={760}
+        onClose={onClose}
+        footer={
+          <Button variant="ghost" onClick={onClose}>
+            Close
+          </Button>
+        }
+      >
+        {ledger.isError ? (
+          <EmptyState
+            kind="error"
+            title="Ledger failed to load"
+            body={ledger.error instanceof Error ? ledger.error.message : "The request did not complete."}
+            action={
+              <Button size="sm" onClick={() => void ledger.refetch()}>
+                Try again
+              </Button>
+            }
+          />
+        ) : null}
+
+        <div className="ak-2col">
+          <MetricCard
+            label="NUMU owes"
+            value={formatMoney(data?.balance_cents, data?.currency)}
+            note="Every sale, payout and adjustment"
+            icon="banknote"
+            loading={ledger.isLoading}
+          />
+          <MetricCard
+            label="Payable now"
+            value={formatMoney(data?.payable_cents, data?.currency)}
+            note="Sales stay on hold for 30 days"
+            icon="clock"
+            loading={ledger.isLoading}
+          />
+        </div>
+
+        <Card variant="outlined" title="Record a payout or an adjustment">
+          <div className="space-y-3">
+            <FormField label="Type" htmlFor="ledger-kind">
+              <Select
+                id="ledger-kind"
+                value={kind}
+                onChange={(e) => setKind(e.target.value as EntryKind)}
+                options={[
+                  { value: "payout", label: "Payout: a bank transfer already sent" },
+                  { value: "adjustment", label: "Adjustment: a signed correction" },
+                ]}
+              />
+            </FormField>
+            <p className="text-sm text-muted-foreground">
+              {payout ? (
+                "Send the bank transfer first, then record it here. NUMU moves no money from this page: the entry lowers what NUMU owes, up to what is payable now."
+              ) : (
+                <>
+                  A negative amount lowers what NUMU owes this partner (e.g. -79.20 reverses their share of a charge refunded
+                  to a merchant); a positive amount raises it. NUMU moves no money from this page. Refund the merchant
+                  separately in{" "}
+                  <a className="underline underline-offset-2" href="/wallets" target="_blank" rel="noopener noreferrer">
+                    Merchant wallets
+                  </a>{" "}
+                  (Adjust).
+                </>
+              )}
+            </p>
+            <FormField
+              label={payout ? "Amount sent" : "Amount (signed)"}
+              required
+              htmlFor="ledger-amount"
+              error={amountError}
+              hint={
+                cents !== null && !amountError
+                  ? payout
+                    ? formatMoney(cents)
+                    : signedMoney(cents)
+                  : payout
+                    ? `Payable now: ${formatMoney(data?.payable_cents, data?.currency)}`
+                    : "Minus lowers what NUMU owes; no sign raises it"
+              }
+            >
+              <Input
+                id="ledger-amount"
+                dir="ltr"
+                numeric
+                affix="EGP"
+                inputMode="decimal"
+                autoComplete="off"
+                placeholder={payout ? "1250.00" : "-79.20"}
+                // The affix is absolutely placed; without this an end-aligned amount runs under "EGP".
+                style={{ paddingInlineEnd: 48 }}
+                value={amount}
+                error={!!amountError}
+                onChange={(e) => setAmount(e.target.value)}
+              />
+            </FormField>
+            <FormField
+              label={payout ? "Bank transfer reference" : "Reference"}
+              required
+              htmlFor="ledger-reference"
+              hint={payout ? "From the bank. Each reference is recorded once." : "e.g. the refund's reference. Each reference is recorded once."}
+            >
+              <Input
+                id="ledger-reference"
+                mono
+                maxLength={128}
+                autoComplete="off"
+                value={reference}
+                onChange={(e) => setReference(e.target.value)}
+              />
+            </FormField>
+            <FormField label="Note" required={!payout} htmlFor="ledger-note" hint={payout ? "Optional." : "Why. At least 3 characters."}>
+              <Textarea id="ledger-note" rows={2} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} />
+            </FormField>
+            <Button
+              variant="primary"
+              icon="banknote"
+              disabled={!ready}
+              loading={record.isPending}
+              onClick={() => cents !== null && setDraft({ kind, amount_cents: cents, reference: ref, note: text })}
+            >
+              {payout ? "Record payout…" : "Record adjustment…"}
+            </Button>
+          </div>
+        </Card>
+
+        <DataTable
+          dense
+          caption="Ledger entries, newest first"
+          columns={LEDGER_COLUMNS}
+          rows={data?.entries ?? []}
+          rowKey={(e) => e.id}
+          loading={ledger.isLoading}
+          empty={
+            <EmptyState
+              kind="empty"
+              icon="inbox"
+              title="No entries yet"
+              body="A sale appears when a merchant pays for one of this partner's apps."
+            />
+          }
+        />
+        {data && data.entries.length >= 100 ? (
+          <p className="text-sm text-muted-foreground">The latest 100 entries. The totals above count every entry.</p>
+        ) : null}
+      </Drawer>
+
+      {draft && data ? (
+        <ConfirmDialog
+          tone="warning"
+          title={draft.kind === "payout" ? "Record this payout?" : "Record this adjustment?"}
+          entity={[
+            { label: "Partner", value: partner.display_name },
+            draft.kind === "payout"
+              ? { label: "Sent", value: formatMoney(draft.amount_cents), mono: true }
+              : { label: "Adjustment", value: signedMoney(draft.amount_cents), mono: true },
+            { label: "Reference", value: draft.reference, mono: true },
+            ...(draft.note ? [{ label: "Note", value: draft.note }] : []),
+          ]}
+          consequences={[
+            draft.kind === "payout"
+              ? "Confirms the bank transfer has already left NUMU's account. Nothing is sent from here."
+              : "Changes only what NUMU owes. Nothing is sent or refunded from here.",
+            `What NUMU owes ${partner.display_name} goes from ${formatMoney(data.balance_cents)} to ${formatMoney(
+              data.balance_cents + (draft.kind === "payout" ? -draft.amount_cents : draft.amount_cents),
+            )}.`,
+            "An entry can't be deleted; a mistake is corrected with an adjustment.",
+          ]}
+          confirmLabel={draft.kind === "payout" ? "Record payout" : "Record adjustment"}
+          onClose={() => setDraft(null)}
+          onConfirm={() => {
+            record.mutate(draft);
+            setDraft(null);
+          }}
+        />
+      ) : null}
+    </>
+  );
+}
+
 function PartnerCard({
   partner,
   busy,
   onApprove,
   onReinstate,
   onNote,
+  onLedger,
 }: {
   partner: AdminPartner;
   busy: boolean;
   onApprove: () => void;
   onReinstate: () => void;
   onNote: (kind: "reject" | "suspend") => void;
+  onLedger: () => void;
 }) {
   const facts: KeyValueItem[] = [
     { label: "Kind", value: partner.kind === "company" ? "Company" : "Individual" },
@@ -173,6 +548,11 @@ function PartnerCard({
               Reinstate
             </Button>
           ) : null}
+          {partner.status === "approved" || partner.status === "suspended" ? (
+            <Button size="sm" variant="subtle" icon="banknote" onClick={onLedger}>
+              Ledger
+            </Button>
+          ) : null}
         </div>
       }
     >
@@ -188,6 +568,7 @@ export default function Partners() {
   const [dialog, setDialog] = useState<NoteDialog>(null);
   const [noteAr, setNoteAr] = useState("");
   const [noteEn, setNoteEn] = useState("");
+  const [ledgerFor, setLedgerFor] = useState<AdminPartner | null>(null);
 
   const partnersQuery = useQuery({
     queryKey: ["partners", "list", filter],
@@ -236,7 +617,10 @@ export default function Partners() {
         />
       }
     >
-      <ProgramSwitch />
+      <div className="ak-2col">
+        <ProgramSwitch />
+        <BillingSwitch />
+      </div>
 
       {partnersQuery.isError ? (
         <Card>
@@ -285,9 +669,12 @@ export default function Partners() {
               setNoteEn("");
               setDialog({ partner: p, kind });
             }}
+            onLedger={() => setLedgerFor(p)}
           />
         ))}
       </div>
+
+      {ledgerFor ? <LedgerDrawer partner={ledgerFor} onClose={() => setLedgerFor(null)} /> : null}
 
       <Dialog
         open={dialog !== null}

@@ -1,13 +1,18 @@
 /**
- * Partner program admin API — /api/v1/admin/partners (apps plan, Phase 2).
+ * Partner program admin API — /api/v1/admin/partners (apps plan, Phase 2;
+ * the billing switch and the partner ledger, Phase 7).
  *
- * Every write (open/close the program, approve, reject, suspend, reinstate)
- * needs the 2FA step-up and lands in audit_logs. Notes the partner reads are
- * sent in Arabic and English. An illegal transition comes back as a 409 whose
- * `detail` apiClient re-throws as the Error message.
+ * Every write (open/close the program, approve, reject, suspend, reinstate,
+ * billing, payouts, adjustments) needs the 2FA step-up and lands in
+ * audit_logs. Notes the partner reads are sent in Arabic and English. An
+ * illegal transition comes back as a 409 whose message apiClient re-throws
+ * as the Error message.
+ *
+ * `@/lib/apiClient`, not `./api`: the 2FA step-up prompt and the reading of
+ * the API's `error.message` envelope (numu-admin #91) live in that client.
  */
 
-import { apiClient } from "./api";
+import { apiClient } from "@/lib/apiClient";
 
 export type PartnerStatus = "pending" | "approved" | "rejected" | "suspended";
 
@@ -46,6 +51,83 @@ export function setProgram(enabled: boolean): Promise<{ enabled: boolean }> {
   return apiClient<{ enabled: boolean }>("/admin/partners/program", {
     method: "PUT",
     body: JSON.stringify({ enabled }),
+  });
+}
+
+/**
+ * NUMU billing for Partner Apps (draft Partner Agreement § 11.1). Off:
+ * partners may publish only free or external apps. PUT needs 2FA.
+ */
+export function getPartnerBilling(): Promise<{ enabled: boolean }> {
+  return apiClient<{ enabled: boolean }>("/admin/partners/billing");
+}
+
+export function setPartnerBilling(enabled: boolean): Promise<{ enabled: boolean }> {
+  return apiClient<{ enabled: boolean }>("/admin/partners/billing", {
+    method: "PUT",
+    body: JSON.stringify({ enabled }),
+  });
+}
+
+/** One ledger row. Money is signed piasters: sales +, payouts −, adjustments either way. */
+export interface LedgerEntry {
+  id: string;
+  kind: "sale" | "payout" | "adjustment";
+  amount_cents: number;
+  /** Sales only: what the merchant paid, and the 20% NUMU kept. */
+  gross_cents: number | null;
+  platform_fee_cents: number | null;
+  currency: string;
+  app_id: string | null;
+  /** Added by NUMU-api #656; null on payouts and adjustments, which have no app. */
+  app_name?: string | null;
+  app_slug?: string | null;
+  reference: string | null;
+  note: string | null;
+  created_at: string;
+}
+
+export interface PartnerLedger {
+  /** What NUMU owes the partner: the sum of every entry. */
+  balance_cents: number;
+  /** The balance minus sales still inside the 30-day hold. */
+  payable_cents: number;
+  currency: string;
+  /** Newest first; the API returns the latest 100. */
+  entries: LedgerEntry[];
+}
+
+export function getLedger(partnerId: string): Promise<PartnerLedger> {
+  return apiClient<PartnerLedger>(`/admin/partners/${partnerId}/ledger`);
+}
+
+type Recorded = { entry: LedgerEntry; balance_cents: number };
+
+/**
+ * Records a bank transfer ALREADY sent to the partner; NUMU moves no money.
+ * 2FA. 409 when it exceeds what is payable or the reference is already used.
+ */
+export function recordPayout(
+  partnerId: string,
+  body: { amount_cents: number; reference: string; note?: string },
+): Promise<Recorded> {
+  return apiClient<Recorded>(`/admin/partners/${partnerId}/payouts`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+/**
+ * A signed correction to what NUMU owes, e.g. −(partner's share) of a charge
+ * refunded to a merchant. 2FA. 409 when the reference is already used.
+ */
+export function recordAdjustment(
+  partnerId: string,
+  body: { amount_cents: number; reference: string; note: string },
+): Promise<Recorded> {
+  return apiClient<Recorded>(`/admin/partners/${partnerId}/adjustments`, {
+    method: "POST",
+    body: JSON.stringify(body),
   });
 }
 
