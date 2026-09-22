@@ -230,17 +230,20 @@ export default function Settings() {
   });
   const [metaDraft, setMetaDraft] = useState<MetaCredentials | null>(null);
   const [showWebhookToken, setShowWebhookToken] = useState(false);
+  const [showRegistrationPin, setShowRegistrationPin] = useState(false);
   if (metaDraft === null && metaQuery.data) {
     setMetaDraft({
       ...metaQuery.data,
       meta_app_secret: "",
       meta_webhook_verify_token: "",
+      meta_phone_registration_pin: "",
     });
   }
   const meta = metaDraft ?? {
     meta_app_id: "",
     meta_app_secret: "",
     meta_webhook_verify_token: "",
+    meta_phone_registration_pin: "",
     meta_login_config_id: "",
     meta_config_id: "",
     meta_graph_api_version: "v25.0",
@@ -260,6 +263,9 @@ export default function Settings() {
         ...(meta.meta_webhook_verify_token
           ? { meta_webhook_verify_token: meta.meta_webhook_verify_token }
           : {}),
+        ...(meta.meta_phone_registration_pin
+          ? { meta_phone_registration_pin: meta.meta_phone_registration_pin }
+          : {}),
       }),
     onSuccess: (saved) => {
       queryClient.setQueryData(["meta-credentials"], saved);
@@ -267,6 +273,7 @@ export default function Settings() {
         ...saved,
         meta_app_secret: "",
         meta_webhook_verify_token: "",
+        meta_phone_registration_pin: "",
       });
       toast.success("Meta credentials saved");
     },
@@ -292,6 +299,24 @@ export default function Settings() {
     } catch {
       toast.error("Copy failed — show the token and copy it manually");
       setShowWebhookToken(true);
+    }
+  };
+  const generateRegistrationPin = () => {
+    const value = crypto.getRandomValues(new Uint32Array(1))[0];
+    setMetaField("meta_phone_registration_pin", String(100000 + (value % 900000)));
+    setShowRegistrationPin(true);
+  };
+  const copyRegistrationPin = async () => {
+    if (!meta.meta_phone_registration_pin) {
+      toast.error("Generate a new PIN first. Saved PINs cannot be revealed.");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(meta.meta_phone_registration_pin);
+      toast.success("Phone registration PIN copied");
+    } catch {
+      toast.error("Copy failed — show the PIN and copy it manually");
+      setShowRegistrationPin(true);
     }
   };
 
@@ -997,11 +1022,34 @@ export default function Settings() {
                   </div>
                   <p className="text-xs text-muted-foreground">Generate, copy, then save. Existing saved tokens stay encrypted and cannot be displayed again.</p>
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="phoneRegistrationPin" className="flex items-center gap-2">Cloud API Phone PIN {metaQuery.data?.meta_phone_registration_pin && <Badge variant="secondary">Configured</Badge>}</Label>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <div className="relative min-w-0 flex-1">
+                      <Input id="phoneRegistrationPin" className="pr-10" type={showRegistrationPin ? "text" : "password"} inputMode="numeric" maxLength={6} autoComplete="new-password" value={meta.meta_phone_registration_pin} onChange={(e) => setMetaField("meta_phone_registration_pin", e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder={metaQuery.data?.meta_phone_registration_pin ? "Saved securely — generate a replacement to copy" : "Generate a six digit PIN"} />
+                      <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2" onClick={() => setShowRegistrationPin((shown) => !shown)} disabled={!meta.meta_phone_registration_pin} aria-label={showRegistrationPin ? "Hide phone PIN" : "Show phone PIN"}>
+                        {showRegistrationPin ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                    <Button type="button" variant="outline" onClick={copyRegistrationPin} disabled={!meta.meta_phone_registration_pin}><Copy className="mr-2 h-4 w-4" />Copy</Button>
+                    <Button type="button" variant="outline" onClick={generateRegistrationPin}>Generate</Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Used server side to register customer phone numbers with WhatsApp Cloud API.</p>
+                </div>
+              </div>
+              <div className="rounded-lg border bg-muted/30 p-4">
+                <p className="text-sm font-medium">Meta dashboard checklist</p>
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-muted-foreground">
+                  <li>Allowed domain for the JavaScript SDK: merchant.numueg.app</li>
+                  <li>Valid OAuth redirect URI: https://merchant.numueg.app/</li>
+                  <li>Webhook callback: https://numueg.app/api/v1/webhooks/whatsapp/callback</li>
+                  <li>Subscribe the WhatsApp webhook to the messages field.</li>
+                </ul>
               </div>
               <Separator />
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-sm text-muted-foreground">App ID and Config IDs are identifiers. App Secret and Verify Token are encrypted secrets.</p>
-                <Button onClick={() => metaSaveMutation.mutate()} disabled={metaSaveMutation.isPending || metaQuery.isLoading || !meta.meta_app_id.trim() || !meta.meta_config_id.trim() || !meta.meta_graph_api_version.trim()}>
+                <p className="text-sm text-muted-foreground">App Secret, Verify Token, and Phone PIN are encrypted and never returned in plaintext.</p>
+                <Button onClick={() => metaSaveMutation.mutate()} disabled={metaSaveMutation.isPending || metaQuery.isLoading || !meta.meta_app_id.trim() || !meta.meta_config_id.trim() || !meta.meta_graph_api_version.trim() || (!!meta.meta_phone_registration_pin && meta.meta_phone_registration_pin.length !== 6)}>
                   {metaSaveMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Key className="mr-2 h-4 w-4" />}
                   Save Meta credentials
                 </Button>
