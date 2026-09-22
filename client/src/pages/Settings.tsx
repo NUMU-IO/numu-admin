@@ -39,6 +39,11 @@ import {
   updatePlatformSettings,
   type PlatformSettings,
 } from "@/services/platformSettingsApi";
+import {
+  getMetaCredentials,
+  updateMetaCredentials,
+  type MetaCredentials,
+} from "@/services/metaCredentialsApi";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Bell,
@@ -215,6 +220,63 @@ export default function Settings() {
     saveMutation.mutate(patch);
   };
   const saving = saveMutation.isPending;
+
+  const metaQuery = useQuery({
+    queryKey: ["meta-credentials"],
+    queryFn: getMetaCredentials,
+    enabled: isAuthenticated,
+  });
+  const [metaDraft, setMetaDraft] = useState<MetaCredentials | null>(null);
+  if (metaDraft === null && metaQuery.data) {
+    setMetaDraft({
+      ...metaQuery.data,
+      meta_app_secret: "",
+      meta_webhook_verify_token: "",
+    });
+  }
+  const meta = metaDraft ?? {
+    meta_app_id: "",
+    meta_app_secret: "",
+    meta_webhook_verify_token: "",
+    meta_login_config_id: "",
+    meta_config_id: "",
+    meta_graph_api_version: "v25.0",
+  };
+  const setMetaField = (key: keyof MetaCredentials, value: string) =>
+    setMetaDraft({ ...meta, [key]: value });
+  const metaSaveMutation = useMutation({
+    mutationFn: () =>
+      updateMetaCredentials({
+        meta_app_id: meta.meta_app_id.trim(),
+        meta_login_config_id: meta.meta_login_config_id.trim(),
+        meta_config_id: meta.meta_config_id.trim(),
+        meta_graph_api_version: meta.meta_graph_api_version.trim(),
+        ...(meta.meta_app_secret
+          ? { meta_app_secret: meta.meta_app_secret }
+          : {}),
+        ...(meta.meta_webhook_verify_token
+          ? { meta_webhook_verify_token: meta.meta_webhook_verify_token }
+          : {}),
+      }),
+    onSuccess: (saved) => {
+      queryClient.setQueryData(["meta-credentials"], saved);
+      setMetaDraft({
+        ...saved,
+        meta_app_secret: "",
+        meta_webhook_verify_token: "",
+      });
+      toast.success("Meta credentials saved");
+    },
+    onError: (err) =>
+      toast.error((err as Error).message || "Failed to save Meta credentials"),
+  });
+  const generateWebhookToken = () => {
+    const bytes = crypto.getRandomValues(new Uint8Array(32));
+    setMetaField(
+      "meta_webhook_verify_token",
+      Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join(""),
+    );
+  };
 
   // Notification settings state
   const [notificationSettings, setNotificationSettings] = useState({
@@ -875,49 +937,52 @@ export default function Settings() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="grid gap-4 max-w-md">
+              <Banner tone="info" icon="lock" title="Stored securely and applied immediately">
+                Secrets are encrypted on the API and never returned to this page. Leave a secret blank to keep its current value. Environment values remain the fallback when an Admin override is empty.
+              </Banner>
+              {metaQuery.isError && <Banner tone="danger" title="Could not load Meta credentials">{(metaQuery.error as Error).message}</Banner>}
+              <div className="grid gap-5 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="metaAppId">META_APP_ID</Label>
-                  <Input id="metaAppId" placeholder="Enter your Meta App ID" />
+                  <Label htmlFor="metaAppId">Meta App ID</Label>
+                  <Input id="metaAppId" value={meta.meta_app_id} onChange={(e) => setMetaField("meta_app_id", e.target.value)} placeholder="990177437314014" />
+                  <p className="text-xs text-muted-foreground">Meta App Dashboard → Settings → Basic.</p>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="metaAppSecret">META_APP_SECRET</Label>
-                  <Input
-                    id="metaAppSecret"
-                    type="password"
-                    placeholder="Enter your Meta App Secret"
-                  />
+                  <Label htmlFor="metaAppSecret" className="flex items-center gap-2">App Secret {metaQuery.data?.meta_app_secret && <Badge variant="secondary">Configured</Badge>}</Label>
+                  <Input id="metaAppSecret" type="password" autoComplete="new-password" value={meta.meta_app_secret} onChange={(e) => setMetaField("meta_app_secret", e.target.value)} placeholder={metaQuery.data?.meta_app_secret ? "Leave blank to keep current secret" : "Enter Meta App Secret"} />
+                  <p className="text-xs text-muted-foreground">Reveal it in Meta App Dashboard → Settings → Basic.</p>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="webhookVerifyToken">META_WEBHOOK_VERIFY_TOKEN</Label>
-                  <Input
-                    id="webhookVerifyToken"
-                    placeholder="Enter webhook verify token"
-                  />
+                  <Label htmlFor="embeddedSignupConfig">WhatsApp Embedded Signup Config ID</Label>
+                  <Input id="embeddedSignupConfig" value={meta.meta_config_id} onChange={(e) => setMetaField("meta_config_id", e.target.value)} placeholder="2684108888713016" />
+                  <p className="text-xs text-muted-foreground">Use cases → Connect on WhatsApp → Embedded Signup configuration.</p>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="loginConfigId">META_LOGIN_CONFIG_ID</Label>
-                  <Input
-                    id="loginConfigId"
-                    placeholder="Enter Login Config ID"
-                  />
+                  <Label htmlFor="loginConfigId">Facebook / Instagram Login Config ID</Label>
+                  <Input id="loginConfigId" value={meta.meta_login_config_id} onChange={(e) => setMetaField("meta_login_config_id", e.target.value)} placeholder="Optional for social channel OAuth" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="graphVersion">Graph API Version</Label>
+                  <Input id="graphVersion" value={meta.meta_graph_api_version} onChange={(e) => setMetaField("meta_graph_api_version", e.target.value)} placeholder="v25.0" />
+                  <p className="text-xs text-muted-foreground">Pinned for Embedded Signup and Graph API calls.</p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="webhookVerifyToken" className="flex items-center gap-2">Webhook Verify Token {metaQuery.data?.meta_webhook_verify_token && <Badge variant="secondary">Configured</Badge>}</Label>
+                  <div className="flex gap-2">
+                    <Input id="webhookVerifyToken" type="password" autoComplete="new-password" value={meta.meta_webhook_verify_token} onChange={(e) => setMetaField("meta_webhook_verify_token", e.target.value)} placeholder={metaQuery.data?.meta_webhook_verify_token ? "Leave blank to keep current token" : "Generate a secure token"} />
+                    <Button type="button" variant="outline" onClick={generateWebhookToken}>Generate</Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Use this exact value in Meta's webhook Verify token field.</p>
                 </div>
               </div>
-              {/* This panel has no backend. The four fields above were never
-                  persisted, and the save button called the platform-settings
-                  mutation — so typing an App ID here and pressing save renamed
-                  the platform. The fields stay as a reference for what the API
-                  reads; the misleading save is gone. */}
-              <Banner
-                tone="info"
-                icon="lock"
-                title="Meta credentials are configured on the API, not here"
-              >
-                META_APP_ID, META_APP_SECRET, META_WEBHOOK_VERIFY_TOKEN and
-                META_LOGIN_CONFIG_ID are read from the API's environment at boot.
-                Change them on the API host and restart; nothing typed on this
-                screen is saved.
-              </Banner>
+              <Separator />
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-muted-foreground">App ID and Config IDs are identifiers. App Secret and Verify Token are encrypted secrets.</p>
+                <Button onClick={() => metaSaveMutation.mutate()} disabled={metaSaveMutation.isPending || metaQuery.isLoading || !meta.meta_app_id.trim() || !meta.meta_config_id.trim() || !meta.meta_graph_api_version.trim()}>
+                  {metaSaveMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Key className="mr-2 h-4 w-4" />}
+                  Save Meta credentials
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
