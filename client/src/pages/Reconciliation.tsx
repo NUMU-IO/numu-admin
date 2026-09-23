@@ -40,9 +40,12 @@ import {
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   adminListReconciliationRuns,
+  adminListReconciliationTransactions,
   adminListRunMismatches,
+  adminReconcileMarkPaid,
   adminTriggerReconciliation,
   type AdminReconciliationRun,
+  type AdminTransactionOrderRow,
   type MismatchType,
 } from "@/services/adminApi";
 import {
@@ -348,6 +351,192 @@ function RunRow({
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
+// ── Live transactions (gateway payment ↔ order state) ─────────────────────────
+
+const GATEWAYS = ["kashier", "paymob", "moyasar", "fawaterak", "instapay"];
+
+function formatMoney(cents: number, currency: string): string {
+  return `${currency} ${(cents / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+}
+
+function TransactionsPanel() {
+  const queryClient = useQueryClient();
+  const [gateway, setGateway] = useState("all");
+  const [mismatchOnly, setMismatchOnly] = useState(true);
+  const [page, setPage] = useState(1);
+  const [confirming, setConfirming] = useState<AdminTransactionOrderRow | null>(null);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["admin-reconciliation-transactions", gateway, mismatchOnly, page],
+    queryFn: () =>
+      adminListReconciliationTransactions({
+        gateway: gateway !== "all" ? gateway : undefined,
+        mismatch_only: mismatchOnly,
+        page,
+        limit: 50,
+      }),
+  });
+
+  const markPaid = useMutation({
+    mutationFn: (txId: string) => adminReconcileMarkPaid(txId),
+    onSuccess: (row) => {
+      toast.success(`${row.order_number} marked paid`);
+      setConfirming(null);
+      queryClient.invalidateQueries({ queryKey: ["admin-reconciliation-transactions"] });
+    },
+    onError: (err: Error) => toast.error(err.message || "Failed to mark paid"),
+  });
+
+  const rows = data?.items ?? [];
+
+  return (
+    <div className="dashboard-card mb-6">
+      <div className="flex flex-col md:flex-row gap-3 items-start md:items-center justify-between mb-4">
+        <div>
+          <h2 className="text-base font-semibold">Gateway transactions</h2>
+          <p className="text-xs text-muted-foreground">
+            Live, last 30 days. A paid transaction on an unpaid order means the webhook did not land.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <Select value={gateway} onValueChange={(v) => { setGateway(v); setPage(1); }}>
+            <SelectTrigger className="w-36">
+              <SelectValue placeholder="Gateway" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All gateways</SelectItem>
+              {GATEWAYS.map((g) => (
+                <SelectItem key={g} value={g}>{g}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={mismatchOnly ? "mismatch" : "all"}
+            onValueChange={(v) => { setMismatchOnly(v === "mismatch"); setPage(1); }}
+          >
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="mismatch">Mismatches only</SelectItem>
+              <SelectItem value="all">All transactions</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="flex justify-center py-8">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        </div>
+      ) : rows.length === 0 ? (
+        <p className="text-sm text-muted-foreground py-6 text-center">
+          {mismatchOnly ? "No mismatches. Every paid transaction has a paid order." : "No transactions."}
+        </p>
+      ) : (
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Date</TableHead>
+                <TableHead>Store</TableHead>
+                <TableHead>Gateway</TableHead>
+                <TableHead>Transaction</TableHead>
+                <TableHead className="text-right">Amount</TableHead>
+                <TableHead>Order</TableHead>
+                <TableHead>Order state</TableHead>
+                <TableHead>Issue</TableHead>
+                <TableHead />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((r) => (
+                <TableRow key={r.transaction_id}>
+                  <TableCell className="whitespace-nowrap text-xs">{formatDateTime(r.created_at)}</TableCell>
+                  <TableCell className="text-xs">{r.store_name ?? r.store_id.slice(0, 8)}</TableCell>
+                  <TableCell className="text-xs">{r.gateway}</TableCell>
+                  <TableCell className="font-mono text-xs">
+                    {r.gateway_transaction_id ?? "—"}
+                    <span className="block text-muted-foreground">{r.tx_status}</span>
+                  </TableCell>
+                  <TableCell className="text-right text-xs whitespace-nowrap">
+                    {formatMoney(r.amount_cents, r.currency)}
+                  </TableCell>
+                  <TableCell className="font-mono text-xs">{r.order_number ?? "—"}</TableCell>
+                  <TableCell className="text-xs">
+                    {r.order_status ? `${r.order_status} / ${r.payment_status}` : "—"}
+                  </TableCell>
+                  <TableCell>
+                    {r.mismatch === "paid_not_recorded" && (
+                      <NumuBadge tone="danger" square>Paid, not recorded</NumuBadge>
+                    )}
+                    {r.mismatch === "order_missing" && (
+                      <NumuBadge tone="warning" square>No order</NumuBadge>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {r.mismatch === "paid_not_recorded" && (
+                      <Button size="sm" variant="outline" onClick={() => setConfirming(r)}>
+                        Mark paid
+                      </Button>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+
+      {data && data.total_pages > 1 && (
+        <div className="flex items-center justify-end gap-2 mt-4 text-xs">
+          <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage(page - 1)}>
+            Previous
+          </Button>
+          <span>
+            Page {data.page} of {data.total_pages}
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={page >= data.total_pages}
+            onClick={() => setPage(page + 1)}
+          >
+            Next
+          </Button>
+        </div>
+      )}
+
+      <Dialog open={confirming !== null} onOpenChange={(open) => !open && setConfirming(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Mark {confirming?.order_number} paid?</DialogTitle>
+            <DialogDescription>
+              Applies {confirming?.gateway} transaction {confirming?.gateway_transaction_id} (
+              {confirming && formatMoney(confirming.amount_cents, confirming.currency)}) to the order,
+              as if the webhook had landed. The merchant gets the new-order notifications and the
+              shipment is booked if auto-shipping is on. Logged to the audit trail.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirming(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => confirming && markPaid.mutate(confirming.transaction_id)}
+              disabled={markPaid.isPending}
+              className="gap-2"
+            >
+              {markPaid.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Mark paid
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
 export default function Reconciliation() {
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -440,6 +629,8 @@ export default function Reconciliation() {
           flat
         />
       </div>
+
+      <TransactionsPanel />
 
       {/* Controls */}
       <div className="dashboard-card mb-6">
