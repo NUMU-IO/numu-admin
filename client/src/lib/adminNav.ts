@@ -104,6 +104,12 @@ export const ADMIN_NAV: AdminNavSection[] = [
         queueKey: "whatsappAccess",
       },
       {
+        id: "api-tokens",
+        label: "API tokens",
+        icon: "plug",
+        href: "/api-tokens",
+      },
+      {
         id: "support-cases",
         label: "Support cases",
         icon: "inbox",
@@ -151,6 +157,16 @@ export const ADMIN_NAV: AdminNavSection[] = [
     ],
   },
   {
+    // Apps plan (docs/Plans/apps-developer-work/05-SURFACES.md § 1). App
+    // review, App catalog and Webhook health join this section in Phases 3-4.
+    label: "Apps & Partners",
+    items: [
+      { id: "partners", label: "Partners", icon: "plug", href: "/apps/partners" },
+      { id: "app-review", label: "App review", icon: "shieldAlert", href: "/apps/review" },
+      { id: "app-catalog", label: "App catalog", icon: "package", href: "/apps/catalog" },
+    ],
+  },
+  {
     label: "Platform",
     items: [
       {
@@ -164,6 +180,12 @@ export const ADMIN_NAV: AdminNavSection[] = [
         label: "Capabilities",
         icon: "plug",
         href: "/platform/capabilities",
+      },
+      {
+        id: "security",
+        label: "Security (2FA)",
+        icon: "shieldAlert",
+        href: "/security",
       },
       {
         id: "hub-nav",

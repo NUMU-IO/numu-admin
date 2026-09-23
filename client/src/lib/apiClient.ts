@@ -60,6 +60,41 @@ async function rawFetch(
   });
 }
 
+/** The API's error text: `detail` (FastAPI default) or its `error.message`
+ *  envelope, which is what NUMU-api actually sends. */
+export function errorText(body: unknown, status: number): string {
+  const b = body as { detail?: unknown; error?: { message?: unknown } } | null;
+  const text = b?.detail ?? b?.error?.message;
+  return typeof text === "string" ? text : `API error: ${status}`;
+}
+
+/** A 403 from `require_admin_2fa`: not enrolled, or the step-up is stale. */
+export const STEP_UP_REQUIRED = /2FA (required|verification)/i;
+
+/**
+ * Registered by <TwoFactorStepUp />: asks the admin for a code, verifies it,
+ * and resolves true when the gated request may be retried. Kept here so one
+ * retry covers every gated call instead of a prompt in each page.
+ */
+let stepUpHandler: ((reason: string) => Promise<boolean>) | null = null;
+export function setStepUpHandler(fn: ((reason: string) => Promise<boolean>) | null) {
+  stepUpHandler = fn;
+}
+
+/**
+ * True when a 403 is a 2FA step-up the admin just completed, so the caller
+ * may retry once. Shared by both API clients (`services/api.ts` too), or a
+ * gated call made through the other client would dead-end on the 403.
+ */
+export async function stepUpPassed(endpoint: string, reason: string): Promise<boolean> {
+  return (
+    STEP_UP_REQUIRED.test(reason) &&
+    stepUpHandler !== null &&
+    !endpoint.startsWith("/admin/auth/2fa/") &&
+    (await stepUpHandler(reason))
+  );
+}
+
 export async function apiClient<T>(
   endpoint: string,
   options?: RequestInit,
@@ -69,11 +104,14 @@ export async function apiClient<T>(
   // Handle CSRF token expiry: refresh token and retry once
   if (res.status === 403) {
     const body = await res.json().catch(() => null);
+    const reason = errorText(body, res.status);
     if (body?.detail === "CSRF validation failed") {
       await initCSRF();
       res = await rawFetch(endpoint, options);
+    } else if (await stepUpPassed(endpoint, reason)) {
+      res = await rawFetch(endpoint, options);
     } else {
-      throw new Error(body?.detail || `API error: ${res.status}`);
+      throw new Error(reason);
     }
   }
 
@@ -96,7 +134,7 @@ export async function apiClient<T>(
 
   if (!res.ok) {
     const body = await res.json().catch(() => null);
-    throw new Error(body?.detail || `API error: ${res.status}`);
+    throw new Error(errorText(body, res.status));
   }
 
   if (res.status === 204) {

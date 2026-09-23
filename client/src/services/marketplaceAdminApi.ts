@@ -51,6 +51,9 @@ export interface PendingThemeVersion {
    *  build artifact is uploaded; this should always be "approved" but
    *  carries through from the build pipeline for debugging. */
   build_status: string;
+  /** Certification lint: "passed" publishes; anything else needs an override. */
+  lint_status?: string | null;
+  certification_tier?: string | null;
 }
 
 export interface PendingReviewListResponse {
@@ -60,6 +63,8 @@ export interface PendingReviewListResponse {
 export interface ReviewDecisionRequest {
   decision: ReviewDecision;
   notes?: string;
+  /** Publish although the certification lint did not pass (recorded in notes). */
+  override_certification?: boolean;
 }
 
 export interface ReviewDecisionResponse {

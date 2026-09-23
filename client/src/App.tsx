@@ -32,12 +32,18 @@ import MarketplaceReview from "./pages/MarketplaceReview";
 import WalletAdmin from "./pages/WalletAdmin";
 import SubscriptionPayments from "./pages/SubscriptionPayments";
 import WhatsappAccessRequests from "./pages/WhatsappAccessRequests";
+import ApiTokens from "./pages/ApiTokens";
+import Partners from "./pages/Partners";
+import AppReview from "./pages/AppReview";
+import AppCatalog from "./pages/AppCatalog";
 import ThemesPage from "./pages/marketplace/ThemesPage";
 import ThemeDetailPage from "./pages/marketplace/ThemeDetailPage";
 import StoreSnapshotsPage from "./pages/marketplace/StoreSnapshotsPage";
 import PlatformSettingsPage from "./pages/platform/SettingsPage";
 import CapabilitiesPage from "./pages/platform/CapabilitiesPage";
 import ComponentShowcase from "./pages/ComponentShowcase";
+import Security from "./pages/Security";
+import { TwoFactorStepUp } from "./components/TwoFactorStepUp";
 import TrustRisk from "./pages/TrustRisk";
 import SupportCases from "./pages/SupportCases";
 import Campaigns from "./pages/Campaigns";
@@ -165,6 +171,18 @@ function Router() {
       <Route path="/whatsapp-access">
         {() => <ProtectedRoute component={WhatsappAccessRequests} />}
       </Route>
+      <Route path="/api-tokens">
+        {() => <ProtectedRoute component={ApiTokens} />}
+      </Route>
+      <Route path="/apps/partners">
+        {() => <ProtectedRoute component={Partners} />}
+      </Route>
+      <Route path="/apps/review">
+        {() => <ProtectedRoute component={AppReview} />}
+      </Route>
+      <Route path="/apps/catalog">
+        {() => <ProtectedRoute component={AppCatalog} />}
+      </Route>
       <Route path="/wallets">
         {() => <ProtectedRoute component={WalletAdmin} />}
       </Route>
@@ -201,6 +219,9 @@ function Router() {
       </Route>
       {/* Live reference for the NUMU design system — what every component
           actually looks like inside this shell. */}
+      <Route path="/security">
+        {() => <ProtectedRoute component={Security} />}
+      </Route>
       <Route path="/design-system">
         {() => <ProtectedRoute component={ComponentShowcase} />}
       </Route>
@@ -230,6 +251,7 @@ function App() {
         <TooltipProvider>
           <Toaster />
           <Router />
+          <TwoFactorStepUp />
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>

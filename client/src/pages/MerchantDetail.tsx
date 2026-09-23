@@ -13,6 +13,7 @@
 
 import DashboardLayout from "@/components/DashboardLayout";
 import { DashboardLayoutSkeleton } from "@/components/DashboardLayoutSkeleton";
+import { ApiAccessPanel } from "@/components/merchants/ApiAccessPanel";
 import { WhatsAppTransportPanel } from "@/components/merchants/WhatsAppTransportPanel";
 import {
   Badge,
@@ -365,6 +366,13 @@ export default function MerchantDetail() {
       {/* Which WhatsApp transport this merchant sends through, and the device
           pairing when it is GOWA. It lives here because this is the page staff
           already have open when a merchant calls about it. */}
+      <ApiAccessPanel
+        tenantId={d.tenant?.id}
+        plan={d.tenant?.plan}
+        featureFlags={d.tenant?.feature_flags}
+        storeName={d.store.name}
+      />
+
       <WhatsAppTransportPanel storeId={storeId} storeName={d.store.name} />
     </DashboardLayout>
   );
