@@ -37,6 +37,9 @@ export interface PlatformConfigSnapshot {
    * + save-cart nudge). Effective value: stored admin flag when set, else
    * the API's CHECKOUT_IDENTITY_ENABLED env default. */
   checkout_identity_enabled: boolean;
+  /** Apple Pay master switch — when false, Apple Pay is hidden platform-wide
+   *  (per-store toggles are ignored at checkout). Default true. */
+  apple_pay_enabled: boolean;
 }
 
 export function getPlatformConfig(): Promise<PlatformConfigSnapshot> {
@@ -76,6 +79,20 @@ export function setCheckoutIdentityEnabled(
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ checkout_identity_enabled: enabled }),
+  });
+}
+
+/**
+ * Apple Pay master switch. When off, Apple Pay is hidden across every
+ * storefront regardless of per-store settings (kill switch). Default on.
+ */
+export function setApplePayEnabled(
+  enabled: boolean,
+): Promise<PlatformConfigSnapshot> {
+  return apiClient<PlatformConfigSnapshot>("/admin/platform-config", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ apple_pay_enabled: enabled }),
   });
 }
 
