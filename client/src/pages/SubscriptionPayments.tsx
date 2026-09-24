@@ -439,7 +439,6 @@ const LIMIT_FIELDS: { key: keyof PlanLimitsItem; label: string }[] = [
 ];
 
 const FEATURE_FIELDS: { key: keyof PlanLimitsItem; label: string }[] = [
-  { key: "webhooks_enabled", label: "Webhooks" },
   { key: "custom_domain_enabled", label: "Custom domain" },
   { key: "api_access_enabled", label: "API access" },
   { key: "analytics_enabled", label: "Analytics" },
