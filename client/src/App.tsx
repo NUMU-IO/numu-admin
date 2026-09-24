@@ -35,6 +35,7 @@ import WhatsappAccessRequests from "./pages/WhatsappAccessRequests";
 import ApiTokens from "./pages/ApiTokens";
 import Partners from "./pages/Partners";
 import AppReview from "./pages/AppReview";
+import PartnerNotices from "./pages/PartnerNotices";
 import AppCatalog from "./pages/AppCatalog";
 import ThemesPage from "./pages/marketplace/ThemesPage";
 import ThemeDetailPage from "./pages/marketplace/ThemeDetailPage";
@@ -179,6 +180,9 @@ function Router() {
       </Route>
       <Route path="/apps/review">
         {() => <ProtectedRoute component={AppReview} />}
+      </Route>
+      <Route path="/apps/notices">
+        {() => <ProtectedRoute component={PartnerNotices} />}
       </Route>
       <Route path="/apps/catalog">
         {() => <ProtectedRoute component={AppCatalog} />}
