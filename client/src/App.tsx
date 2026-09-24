@@ -24,6 +24,9 @@ import Reports from "./pages/Reports";
 import Reconciliation from "./pages/Reconciliation";
 import BetaProgram from "./pages/BetaProgram";
 import PlanLimits from "./pages/PlanLimits";
+import Features from "./pages/Features";
+import FeatureDetail from "./pages/FeatureDetail";
+import Flags from "./pages/Flags";
 import PricingPlans from "./pages/PricingPlans";
 import MerchantHubNav from "./pages/MerchantHubNav";
 import Themes from "./pages/Themes";
@@ -125,6 +128,15 @@ function Router() {
       </Route>
       <Route path="/plan-limits">
         {() => <ProtectedRoute component={PlanLimits} />}
+      </Route>
+      <Route path="/features">
+        {() => <ProtectedRoute component={Features} />}
+      </Route>
+      <Route path="/features/:key">
+        {() => <ProtectedRoute component={FeatureDetail} />}
+      </Route>
+      <Route path="/flags">
+        {() => <ProtectedRoute component={Flags} />}
       </Route>
       <Route path="/merchant-hub-nav">
         {() => <ProtectedRoute component={MerchantHubNav} />}
