@@ -37,6 +37,12 @@ export interface AdminPartner {
   created_at: string;
   dev_store_count: number;
   theme_count: number;
+  /** Added by NUMU-api #695: referral terms and the public directory listing. */
+  referral_bps?: number;
+  referral_months?: number;
+  directory_listed?: boolean;
+  verified?: boolean;
+  directory_hidden?: boolean;
 }
 
 export function listPartners(status?: PartnerStatus): Promise<AdminPartner[]> {
@@ -72,7 +78,7 @@ export function setPartnerBilling(enabled: boolean): Promise<{ enabled: boolean 
 /** One ledger row. Money is signed piasters: sales +, payouts −, adjustments either way. */
 export interface LedgerEntry {
   id: string;
-  kind: "sale" | "payout" | "adjustment";
+  kind: "sale" | "referral" | "payout" | "adjustment";
   amount_cents: number;
   /** Sales only: what the merchant paid, and the 20% NUMU kept. */
   gross_cents: number | null;
@@ -149,6 +155,63 @@ export function suspendPartner(
 ): Promise<AdminPartner> {
   return apiClient<AdminPartner>(`/admin/partners/${id}/suspension`, {
     method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export interface ReferredStore {
+  tenant_id: string;
+  store_name: string;
+  signed_up_at: string;
+  plan: string;
+  status: string;
+  first_paid_at: string | null;
+  earned_cents: number;
+}
+
+export interface PartnerReferrals {
+  code: string;
+  referral_bps: number;
+  referral_months: number;
+  stores: ReferredStore[];
+}
+
+export function getReferrals(partnerId: string): Promise<PartnerReferrals> {
+  return apiClient<PartnerReferrals>(`/admin/partners/${partnerId}/referrals`);
+}
+
+/** The partner's share of referred merchants' plan payments. 2FA. */
+export function setReferralTerms(
+  partnerId: string,
+  body: { referral_bps: number; referral_months: number },
+): Promise<AdminPartner> {
+  return apiClient<AdminPartner>(`/admin/partners/${partnerId}/referral-terms`, {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+}
+
+/** Attribute a store to this partner, replacing any earlier referrer. 2FA. */
+export function assignReferral(partnerId: string, subdomain: string): Promise<{ stores: ReferredStore[] }> {
+  return apiClient<{ stores: ReferredStore[] }>(`/admin/partners/${partnerId}/referrals`, {
+    method: "POST",
+    body: JSON.stringify({ subdomain }),
+  });
+}
+
+export function removeReferral(partnerId: string, tenantId: string): Promise<{ stores: ReferredStore[] }> {
+  return apiClient<{ stores: ReferredStore[] }>(`/admin/partners/${partnerId}/referrals/${tenantId}`, {
+    method: "DELETE",
+  });
+}
+
+/** Grant/revoke the Verified badge, hide/restore the public profile. 2FA. */
+export function setDirectoryFlags(
+  partnerId: string,
+  body: { verified?: boolean; directory_hidden?: boolean },
+): Promise<AdminPartner> {
+  return apiClient<AdminPartner>(`/admin/partners/${partnerId}/directory`, {
+    method: "PUT",
     body: JSON.stringify(body),
   });
 }
