@@ -37,6 +37,37 @@ export interface AdminPartner {
   created_at: string;
   dev_store_count: number;
   theme_count: number;
+  /** The partner's share in basis points; null: the default 8000 (80%). */
+  share_bps: number | null;
+}
+
+export const DEFAULT_SHARE_BPS = 8000;
+
+/** 2FA and audited. Applies to charges from now on; null restores the default. */
+export function setPartnerShare(id: string, share_bps: number | null): Promise<AdminPartner> {
+  return apiClient<AdminPartner>(`/admin/partners/${id}/share`, {
+    method: "PUT",
+    body: JSON.stringify({ share_bps }),
+  });
+}
+
+export interface AdminPartnerCoupon {
+  id: string;
+  app_name: string | null;
+  code: string;
+  percent_off: number | null;
+  amount_off_cents: number | null;
+  duration_cycles: number | null;
+  max_redemptions: number | null;
+  expires_at: string | null;
+  store_id: string | null;
+  active: boolean;
+  redemptions: number;
+  created_at: string;
+}
+
+export function listPartnerCoupons(id: string): Promise<AdminPartnerCoupon[]> {
+  return apiClient<AdminPartnerCoupon[]>(`/admin/partners/${id}/coupons`);
 }
 
 export function listPartners(status?: PartnerStatus): Promise<AdminPartner[]> {
@@ -164,6 +195,9 @@ export interface PartnerStatement {
   refunds_cents: number;
   adjustments_cents: number;
   payouts_cents: number;
+  coupon_discounts_cents: number;
+  /** NUMU's VAT on its fee: informational, never in the partner's balance. */
+  vat_collected_cents: number;
   closing_balance_cents: number;
   entries: {
     id: string;

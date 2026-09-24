@@ -198,6 +198,8 @@ export function listAppSubscriptions(filter: {
 export interface RevenueMonth {
   month: string;
   gross_cents: number;
+  /** 14% VAT on NUMU's fee, inside gross; NUMU's figure excludes it. */
+  vat_cents: number;
   partner_cents: number;
   numu_cents: number;
 }

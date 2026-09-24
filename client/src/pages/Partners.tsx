@@ -57,8 +57,11 @@ import {
   getProgram,
   listPartners,
   recordAdjustment,
+  DEFAULT_SHARE_BPS,
+  listPartnerCoupons,
   recordPayout,
   setPartnerBilling,
+  setPartnerShare,
   setProgram,
   suspendPartner,
   type AdminPartner,
@@ -194,7 +197,7 @@ function BillingSwitch() {
           title="Turn on NUMU billing for Partner Apps?"
           consequences={[
             "Partners can sell apps with a recurring price once App review approves them.",
-            "Merchants who subscribe are charged from their NUMU wallet every cycle. NUMU keeps 20% and owes the partner 80%, paid out by bank transfer.",
+            "Merchants who subscribe are charged from their NUMU wallet every cycle. NUMU keeps its fee (20% by default, set per partner) plus 14% VAT on that fee, and owes the partner the rest, paid out by bank transfer.",
             "Turning billing off later stops new recurring apps; existing subscriptions keep renewing.",
           ]}
           confirmPhrase="counsel signed off"
@@ -274,8 +277,10 @@ function StatementCard({ partner }: { partner: AdminPartner }) {
             items={[
               { label: "Opening balance", value: formatMoney(s.opening_balance_cents), mono: true },
               { label: "Gross sales", value: formatMoney(s.gross_sales_cents), mono: true },
-              { label: "NUMU fees (20%)", value: formatMoney(s.platform_fees_cents), mono: true },
-              { label: "Net sales (80%)", value: signedMoney(s.net_sales_cents), mono: true },
+              { label: "NUMU fees", value: formatMoney(s.platform_fees_cents), mono: true },
+              { label: "Net sales (partner share)", value: signedMoney(s.net_sales_cents), mono: true },
+              { label: "Partner coupon discounts", value: formatMoney(s.coupon_discounts_cents), mono: true },
+              { label: "VAT on NUMU fees (info)", value: formatMoney(s.vat_collected_cents), mono: true },
               { label: "Refunds", value: signedMoney(s.refunds_cents), mono: true },
               { label: "Adjustments", value: signedMoney(s.adjustments_cents), mono: true },
               { label: "Payouts", value: signedMoney(s.payouts_cents), mono: true },
@@ -293,6 +298,107 @@ function StatementCard({ partner }: { partner: AdminPartner }) {
           Download CSV
         </Button>
       </div>
+    </Card>
+  );
+}
+
+/** The partner's revenue share. 2FA and audited; only new charges use it. */
+function ShareCard({ partner }: { partner: AdminPartner }) {
+  const queryClient = useQueryClient();
+  const current = partner.share_bps ?? DEFAULT_SHARE_BPS;
+  const [pct, setPct] = useState(String(current / 100));
+  const [confirming, setConfirming] = useState<number | null | undefined>(undefined);
+  const save = useMutation({
+    mutationFn: (bps: number | null) => setPartnerShare(partner.id, bps),
+    onSuccess: (p) => {
+      toast.success(`Share set to ${(p.share_bps ?? DEFAULT_SHARE_BPS) / 100}%`);
+      void queryClient.invalidateQueries({ queryKey: ["partners"] });
+    },
+    onError,
+  });
+  const n = Number(pct);
+  const bps = Number.isFinite(n) && n >= 0 && n <= 100 ? Math.round(n * 100) : null;
+  return (
+    <Card variant="outlined" title="Revenue share">
+      <div className="space-y-3">
+        <p className="text-sm">
+          Partner keeps <strong>{current / 100}%</strong> of the list price
+          {partner.share_bps == null ? " (default)" : ""}. NUMU keeps the rest and adds 14% VAT on its fee only.
+        </p>
+        <FormField label="Partner share (%)" htmlFor="share-pct" hint="0 to 100. Applies to charges from now on.">
+          <Input id="share-pct" type="number" min={0} max={100} step={0.01} value={pct} onChange={(e) => setPct(e.target.value)} />
+        </FormField>
+        <div className="flex gap-2">
+          <Button size="sm" variant="primary" disabled={bps === null || bps === current} loading={save.isPending} onClick={() => setConfirming(bps)}>
+            Save share…
+          </Button>
+          {partner.share_bps != null ? (
+            <Button size="sm" variant="ghost" onClick={() => setConfirming(null)}>
+              Reset to default
+            </Button>
+          ) : null}
+        </div>
+      </div>
+      {confirming !== undefined ? (
+        <ConfirmDialog
+          title={`Set ${partner.display_name}'s share to ${(confirming ?? DEFAULT_SHARE_BPS) / 100}%?`}
+          consequences={[
+            "Every charge from now on credits the partner at this share; past sales keep the share they were booked with.",
+            "NUMU's fee is the rest of the list price, and the 14% VAT on it follows.",
+          ]}
+          confirmLabel="Save share"
+          onClose={() => setConfirming(undefined)}
+          onConfirm={() => {
+            save.mutate(confirming);
+            setConfirming(undefined);
+          }}
+        />
+      ) : null}
+    </Card>
+  );
+}
+
+function CouponsCard({ partner }: { partner: AdminPartner }) {
+  const q = useQuery({ queryKey: ["partners", "coupons", partner.id], queryFn: () => listPartnerCoupons(partner.id) });
+  return (
+    <Card variant="outlined" title="Coupons">
+      {q.isError ? <p className="text-sm text-destructive">{String(q.error)}</p> : null}
+      <DataTable
+        dense
+        caption="The partner's app coupons. The partner funds them from their share."
+        loading={q.isLoading}
+        rows={q.data ?? []}
+        rowKey={(c) => c.id}
+        columns={[
+          { key: "code", header: "Code", mono: true },
+          { key: "app_name", header: "App" },
+          {
+            key: "percent_off",
+            header: "Discount",
+            render: (c) => (c.percent_off != null ? `${c.percent_off}%` : formatMoney(c.amount_off_cents ?? 0)),
+          },
+          {
+            key: "duration_cycles",
+            header: "Charges",
+            render: (c) => (c.duration_cycles == null ? "Every" : String(c.duration_cycles)),
+          },
+          {
+            key: "redemptions",
+            header: "Redeemed",
+            align: "end",
+            render: (c) => `${c.redemptions}${c.max_redemptions != null ? ` / ${c.max_redemptions}` : ""}`,
+          },
+          {
+            key: "active",
+            header: "State",
+            render: (c) => (
+              <Badge tone={c.active ? "success" : "neutral"} square>
+                {c.active ? "Active" : "Disabled"}
+              </Badge>
+            ),
+          },
+        ]}
+      />
     </Card>
   );
 }
@@ -522,6 +628,8 @@ function LedgerDrawer({ partner, onClose }: { partner: AdminPartner; onClose: ()
           <p className="text-sm text-muted-foreground">The latest 100 entries. The totals above count every entry.</p>
         ) : null}
 
+        <ShareCard partner={partner} />
+        <CouponsCard partner={partner} />
         <StatementCard partner={partner} />
       </Drawer>
 
