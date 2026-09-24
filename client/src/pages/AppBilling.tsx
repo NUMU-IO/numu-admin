@@ -146,8 +146,9 @@ const SUB_COLUMNS: DataTableColumn<AdminAppSubscription>[] = [
 const REVENUE_COLUMNS: DataTableColumn<RevenueMonth>[] = [
   { key: "month", header: "Month", mono: true },
   { key: "gross_cents", header: "Gross", align: "end", mono: true, render: (r) => formatMoney(r.gross_cents) },
-  { key: "partner_cents", header: "Partners (80%)", align: "end", mono: true, render: (r) => formatMoney(r.partner_cents) },
-  { key: "numu_cents", header: "NUMU", align: "end", mono: true, render: (r) => formatMoney(r.numu_cents) },
+  { key: "vat_cents", header: "VAT (NUMU fee)", align: "end", mono: true, render: (r) => formatMoney(r.vat_cents) },
+  { key: "partner_cents", header: "Partners", align: "end", mono: true, render: (r) => formatMoney(r.partner_cents) },
+  { key: "numu_cents", header: "NUMU (ex VAT)", align: "end", mono: true, render: (r) => formatMoney(r.numu_cents) },
 ];
 
 function Subscriptions() {
@@ -203,9 +204,9 @@ function Revenue() {
   return (
     <>
       <div className="ak-2col">
-        <MetricCard label="Gross (12 months)" value={formatMoney(t?.gross_cents)} note="Paid by merchants, net of refunds" icon="banknote" loading={q.isLoading} />
-        <MetricCard label="Partners' 80%" value={formatMoney(t?.partner_cents)} note="Partner App sales, net of refunds" icon="plug" loading={q.isLoading} />
-        <MetricCard label="NUMU" value={formatMoney(t?.numu_cents)} note="20% of Partner Apps, all of NUMU Apps" icon="package" loading={q.isLoading} />
+        <MetricCard label="Gross (12 months)" value={formatMoney(t?.gross_cents)} note={`Paid by merchants, net of refunds, incl. ${formatMoney(t?.vat_cents)} VAT`} icon="banknote" loading={q.isLoading} />
+        <MetricCard label="Partners' share" value={formatMoney(t?.partner_cents)} note="Partner App sales, net of refunds and coupons" icon="plug" loading={q.isLoading} />
+        <MetricCard label="NUMU" value={formatMoney(t?.numu_cents)} note="Fees on Partner Apps and all of NUMU Apps, before VAT" icon="package" loading={q.isLoading} />
       </div>
       <DataTable
         dense
