@@ -306,6 +306,8 @@ export interface PendingReviewItem {
   theme_supported_features: Record<string, unknown>;
   theme_status: string | null;
   price_cents: number;
+  /** The partner's new price; approving this version applies it. */
+  pending_price_cents?: number | null;
   currency: string;
   // Marketing
   thumbnail_url: string | null;

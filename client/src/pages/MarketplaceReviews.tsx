@@ -142,6 +142,11 @@ function ReviewCard({ item, onDecision, pendingDecision }: ReviewCardProps) {
                 {item.price_cents > 0
                   ? `${(item.price_cents / 100).toFixed(2)} ${item.currency}`
                   : "Free"}
+                {item.pending_price_cents != null && item.pending_price_cents !== item.price_cents ? (
+                  <Badge variant="outline" className="ms-2">
+                    {`→ ${item.pending_price_cents > 0 ? `${(item.pending_price_cents / 100).toFixed(2)} EGP` : "Free"} on approval`}
+                  </Badge>
+                ) : null}
               </Field>
               <Field label="Category">
                 {item.theme_category ?? "—"}

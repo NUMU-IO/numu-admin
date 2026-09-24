@@ -222,6 +222,8 @@ export interface AppCharge {
   note: string | null;
   created_at: string;
   refunded: boolean;
+  /** Set for a paid-theme purchase. */
+  theme_id?: string | null;
 }
 
 export function listAppCharges(): Promise<AppCharge[]> {
