@@ -46,10 +46,13 @@ import {
   type StatusBadgeProps,
 } from "@/ds";
 import { formatDateTime, formatMoney, parseMoney } from "@/lib/format";
+import { RefundChargeDialog } from "@/pages/AppBilling";
 import { is2FAError } from "@/services/platformCapabilitiesApi";
 import {
   decidePartner,
+  downloadStatementCsv,
   getLedger,
+  getStatement,
   getPartnerBilling,
   getProgram,
   listPartners,
@@ -249,6 +252,51 @@ const LEDGER_COLUMNS: DataTableColumn<LedgerEntry>[] = [
   },
 ];
 
+/** One month of the partner's ledger, as the partner sees it, plus CSV. */
+function StatementCard({ partner }: { partner: AdminPartner }) {
+  const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const valid = /^\d{4}-(0[1-9]|1[0-2])$/.test(month);
+  const q = useQuery({
+    queryKey: ["partners", "statement", partner.id, month],
+    queryFn: () => getStatement(partner.id, month),
+    enabled: valid,
+  });
+  const s = q.data;
+  return (
+    <Card variant="outlined" title="Monthly statement">
+      <div className="space-y-3">
+        <FormField label="Month" htmlFor="statement-month" hint="YYYY-MM, UTC">
+          <Input id="statement-month" type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
+        </FormField>
+        {q.isError ? <p className="text-sm text-destructive">{String(q.error)}</p> : null}
+        {s ? (
+          <KeyValue
+            items={[
+              { label: "Opening balance", value: formatMoney(s.opening_balance_cents), mono: true },
+              { label: "Gross sales", value: formatMoney(s.gross_sales_cents), mono: true },
+              { label: "NUMU fees (20%)", value: formatMoney(s.platform_fees_cents), mono: true },
+              { label: "Net sales (80%)", value: signedMoney(s.net_sales_cents), mono: true },
+              { label: "Refunds", value: signedMoney(s.refunds_cents), mono: true },
+              { label: "Adjustments", value: signedMoney(s.adjustments_cents), mono: true },
+              { label: "Payouts", value: signedMoney(s.payouts_cents), mono: true },
+              { label: "Closing balance", value: formatMoney(s.closing_balance_cents), mono: true },
+            ]}
+          />
+        ) : null}
+        <Button
+          size="sm"
+          variant="subtle"
+          icon="download"
+          disabled={!valid}
+          onClick={() => downloadStatementCsv(partner.id, month).catch(onError)}
+        >
+          Download CSV
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
 type EntryKind = "payout" | "adjustment";
 type Draft = { kind: EntryKind; amount_cents: number; reference: string; note: string };
 
@@ -266,6 +314,7 @@ function LedgerDrawer({ partner, onClose }: { partner: AdminPartner; onClose: ()
   const [reference, setReference] = useState("");
   const [note, setNote] = useState("");
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [refunding, setRefunding] = useState<LedgerEntry | null>(null);
 
   const record = useMutation({
     mutationFn: (d: Draft) =>
@@ -436,7 +485,27 @@ function LedgerDrawer({ partner, onClose }: { partner: AdminPartner; onClose: ()
         <DataTable
           dense
           caption="Ledger entries, newest first"
-          columns={LEDGER_COLUMNS}
+          columns={[
+            ...LEDGER_COLUMNS,
+            {
+              key: "charge_id",
+              header: "",
+              align: "end",
+              render: (e) => {
+                if (e.kind !== "sale" || !e.charge_id) return null;
+                const done = data?.entries.some((x) => x.reference === `refund:${e.charge_id}`);
+                return done ? (
+                  <Badge tone="neutral" square>
+                    Refunded
+                  </Badge>
+                ) : (
+                  <Button size="sm" variant="subtle" onClick={() => setRefunding(e)}>
+                    Refund…
+                  </Button>
+                );
+              },
+            },
+          ]}
           rows={data?.entries ?? []}
           rowKey={(e) => e.id}
           loading={ledger.isLoading}
@@ -452,7 +521,21 @@ function LedgerDrawer({ partner, onClose }: { partner: AdminPartner; onClose: ()
         {data && data.entries.length >= 100 ? (
           <p className="text-sm text-muted-foreground">The latest 100 entries. The totals above count every entry.</p>
         ) : null}
+
+        <StatementCard partner={partner} />
       </Drawer>
+
+      {refunding?.charge_id ? (
+        <RefundChargeDialog
+          charge={{
+            id: refunding.charge_id,
+            amount_cents: refunding.gross_cents ?? 0,
+            label: `${refunding.app_name ?? "App"} · ${formatDateTime(refunding.created_at)}`,
+          }}
+          onClose={() => setRefunding(null)}
+          onDone={() => void queryClient.invalidateQueries({ queryKey: ["partners"] })}
+        />
+      ) : null}
 
       {draft && data ? (
         <ConfirmDialog

@@ -12,7 +12,7 @@
  * the API's `error.message` envelope (numu-admin #91) live in that client.
  */
 
-import { apiClient } from "@/lib/apiClient";
+import { apiClient, getApiBase } from "@/lib/apiClient";
 
 export type PartnerStatus = "pending" | "approved" | "rejected" | "suspended";
 
@@ -79,6 +79,8 @@ export interface LedgerEntry {
   platform_fee_cents: number | null;
   currency: string;
   app_id: string | null;
+  /** Sales: the wallet charge it came from, which a refund names. */
+  charge_id?: string | null;
   /** Added by NUMU-api #656; null on payouts and adjustments, which have no app. */
   app_name?: string | null;
   app_slug?: string | null;
@@ -149,4 +151,45 @@ export function suspendPartner(
     method: "POST",
     body: JSON.stringify(body),
   });
+}
+
+export interface PartnerStatement {
+  month: string;
+  currency: string;
+  opening_balance_cents: number;
+  gross_sales_cents: number;
+  platform_fees_cents: number;
+  net_sales_cents: number;
+  /** Signed as they move the balance: refunds and payouts are negative. */
+  refunds_cents: number;
+  adjustments_cents: number;
+  payouts_cents: number;
+  closing_balance_cents: number;
+  entries: {
+    id: string;
+    kind: "sale" | "refund" | "adjustment" | "payout";
+    amount_cents: number;
+    app_name: string | null;
+    reference: string | null;
+    created_at: string;
+  }[];
+}
+
+/** One month (`YYYY-MM`, UTC) of a partner's ledger, as the partner sees it. */
+export function getStatement(partnerId: string, month: string): Promise<PartnerStatement> {
+  return apiClient<PartnerStatement>(`/admin/partners/${partnerId}/statements?month=${month}`);
+}
+
+/** The same statement as a CSV file download. */
+export async function downloadStatementCsv(partnerId: string, month: string): Promise<void> {
+  const res = await fetch(`${getApiBase()}/admin/partners/${partnerId}/statements/${month}.csv`, {
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error(`Statement download failed (${res.status})`);
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `partner-statement-${month}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }

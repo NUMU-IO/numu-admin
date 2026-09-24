@@ -160,3 +160,81 @@ export function setKillSwitch(enabled: boolean): Promise<{ enabled: boolean }> {
     body: JSON.stringify({ enabled }),
   });
 }
+
+// ─── Paid apps: subscriptions, revenue, charges, refunds ─────────────
+
+export type AppSubStatus = "active" | "trial" | "past_due" | "cancelled";
+
+export interface AdminAppSubscription {
+  id: string;
+  app_slug: string;
+  app_name: string;
+  store_id: string;
+  store_name: string | null;
+  tenant_id: string;
+  status: AppSubStatus;
+  price_cents: number;
+  currency: string;
+  cycle: "monthly" | "annual";
+  usage_cap_cents: number | null;
+  current_period_end: string;
+  cancel_at_period_end: boolean;
+  created_at: string;
+}
+
+export function listAppSubscriptions(filter: {
+  status?: AppSubStatus;
+  app?: string;
+  store_id?: string;
+}): Promise<AdminAppSubscription[]> {
+  const q = new URLSearchParams(
+    Object.entries(filter).filter((e): e is [string, string] => Boolean(e[1])),
+  );
+  return apiClient<AdminAppSubscription[]>(`/admin/apps/subscriptions?${q}`);
+}
+
+export interface RevenueMonth {
+  month: string;
+  gross_cents: number;
+  partner_cents: number;
+  numu_cents: number;
+}
+
+export interface AppRevenue {
+  currency: string;
+  months: RevenueMonth[];
+  totals: Omit<RevenueMonth, "month">;
+}
+
+export function getAppRevenue(months = 12): Promise<AppRevenue> {
+  return apiClient<AppRevenue>(`/admin/apps/revenue?months=${months}`);
+}
+
+export interface AppCharge {
+  id: string;
+  tenant_id: string;
+  amount_cents: number;
+  currency: string;
+  note: string | null;
+  created_at: string;
+  refunded: boolean;
+}
+
+export function listAppCharges(): Promise<AppCharge[]> {
+  return apiClient<AppCharge[]>("/admin/apps/charges");
+}
+
+/**
+ * Refunds an app charge in full: the merchant's wallet gets it back and the
+ * partner's 80% is reversed. 2FA. A second refund of the same charge is a
+ * no-op (`refunded: false`).
+ */
+export function refundAppCharge(
+  chargeId: string,
+  note: string,
+): Promise<{ refunded: boolean; amount_cents?: number; partner_adjustment_cents?: number }> {
+  return apiClient(`/admin/apps/charges/${chargeId}/refund`, {
+    method: "POST",
+    body: JSON.stringify({ note }),
+  });
+}
