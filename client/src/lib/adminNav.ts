@@ -62,6 +62,7 @@ export const ADMIN_NAV: AdminNavSection[] = [
     items: [
       { id: "billing", label: "Billing", icon: "creditCard", href: "/billing" },
       { id: "plans", label: "Pricing plans", icon: "tag", href: "/pricing-plans" },
+      { id: "features", label: "Features & plans", icon: "sliders", href: "/features" },
       { id: "limits", label: "Plan limits", icon: "sliders", href: "/plan-limits" },
       {
         id: "wallets",
@@ -164,6 +165,8 @@ export const ADMIN_NAV: AdminNavSection[] = [
       { id: "partners", label: "Partners", icon: "plug", href: "/apps/partners" },
       { id: "app-review", label: "App review", icon: "shieldAlert", href: "/apps/review" },
       { id: "app-catalog", label: "App catalog", icon: "package", href: "/apps/catalog" },
+      { id: "app-billing", label: "App billing", icon: "banknote", href: "/apps/billing" },
+      { id: "partner-notices", label: "Partner notices", icon: "bell", href: "/apps/notices" },
     ],
   },
   {
@@ -181,6 +184,7 @@ export const ADMIN_NAV: AdminNavSection[] = [
         icon: "plug",
         href: "/platform/capabilities",
       },
+      { id: "flags", label: "Release flags", icon: "flag", href: "/flags" },
       {
         id: "security",
         label: "Security (2FA)",

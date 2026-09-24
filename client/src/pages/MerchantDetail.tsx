@@ -14,6 +14,7 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { DashboardLayoutSkeleton } from "@/components/DashboardLayoutSkeleton";
 import { ApiAccessPanel } from "@/components/merchants/ApiAccessPanel";
+import { EntitlementsPanel } from "@/components/merchants/EntitlementsPanel";
 import { WhatsAppTransportPanel } from "@/components/merchants/WhatsAppTransportPanel";
 import {
   Badge,
@@ -372,6 +373,8 @@ export default function MerchantDetail() {
         featureFlags={d.tenant?.feature_flags}
         storeName={d.store.name}
       />
+
+      <EntitlementsPanel tenantId={d.tenant?.id} />
 
       <WhatsAppTransportPanel storeId={storeId} storeName={d.store.name} />
     </DashboardLayout>
