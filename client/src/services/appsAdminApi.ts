@@ -50,6 +50,8 @@ export interface AppManifest {
     price_cents?: number;
     cycle?: "monthly" | "annual";
     label?: { ar: string; en: string };
+    trial_days?: number;
+    usage?: { unit: { ar: string; en: string }; price_cents?: number; cap_cents: number };
   };
   [key: string]: unknown;
 }
