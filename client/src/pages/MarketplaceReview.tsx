@@ -7,7 +7,8 @@
  *     plus a query param so the BYOT boundary in the storefront knows
  *     to mount it on a sandbox demo store).
  *   - **Inspect** the source ZIP (link out).
- *   - **Approve** the version, publishing it to the public catalog.
+ *   - **Approve** the version; the partner then publishes it from the
+ *     partner portal, which makes it installable.
  *   - **Reject** with required notes (developer sees the reason).
  *   - **Request changes** — version goes back to draft; developer
  *     can re-submit with edits.
@@ -64,6 +65,13 @@ import { toast } from "sonner";
 
 // ─── Per-version card ───────────────────────────────────────────────────────
 
+const MANUAL_CHECKS = [
+  "Preview renders in Arabic (RTL) and English",
+  "Listing name and description are complete in both languages",
+  "Screenshots and demo store match the theme",
+  "No broken pages in the demo store (home, product, cart, checkout)",
+];
+
 interface ReviewCardProps {
   version: PendingThemeVersion;
   onAct: (decision: ReviewDecision, notes?: string, override?: boolean) => void;
@@ -79,8 +87,11 @@ function ReviewCard({ version, onAct, pending }: ReviewCardProps) {
   // pass unless the reviewer overrides it on purpose.
   const lintPassed = version.lint_status === "passed";
   const [override, setOverride] = useState(false);
+  const [checked, setChecked] = useState<string[]>([]);
+  const allChecked = MANUAL_CHECKS.every((c) => checked.includes(c));
+  const issues = version.lint_issues?.issues ?? [];
 
-  const submittedAt = new Date(version.submitted_at);
+  const submittedAt = new Date(version.created_at ?? version.submitted_at);
 
   function openWithDecision(d: "reject" | "request_changes") {
     setDialog(d);
@@ -100,6 +111,11 @@ function ReviewCard({ version, onAct, pending }: ReviewCardProps) {
           <div className="flex-1 min-w-0">
             <CardTitle className="flex items-center gap-2 text-base">
               <span className="truncate">{version.theme_name}</span>
+              {version.theme_name_ar && (
+                <span dir="rtl" className="truncate text-muted-foreground">
+                  {version.theme_name_ar}
+                </span>
+              )}
               <Badge variant="secondary">v{version.version_string}</Badge>
             </CardTitle>
             <CardDescription className="mt-1">
@@ -164,6 +180,17 @@ function ReviewCard({ version, onAct, pending }: ReviewCardProps) {
               theme.css
             </a>
           )}
+          {version.demo_store_url && (
+            <a
+              href={version.demo_store_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 underline-offset-2 hover:underline"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              demo store
+            </a>
+          )}
           {version.source_zip_path && (
             <a
               href={version.source_zip_path}
@@ -187,6 +214,18 @@ function ReviewCard({ version, onAct, pending }: ReviewCardProps) {
               <span className="text-muted-foreground"> · tier {version.certification_tier}</span>
             )}
           </p>
+          {issues.length > 0 && (
+            <ul className="space-y-0.5 font-mono">
+              {issues.map((i, n) => (
+                <li
+                  key={n}
+                  className={i.severity === "error" ? "text-destructive" : "text-muted-foreground"}
+                >
+                  [{i.severity}] {i.rule}: {i.message}
+                </li>
+              ))}
+            </ul>
+          )}
           {!lintPassed && (
             <label className="flex items-center gap-2">
               <input
@@ -199,11 +238,43 @@ function ReviewCard({ version, onAct, pending }: ReviewCardProps) {
           )}
         </div>
 
+        {(version.theme_screenshots ?? []).length > 0 && (
+          <div className="flex gap-2 overflow-x-auto">
+            {version.theme_screenshots!.map((s) => (
+              <img
+                key={s.url}
+                src={s.url}
+                alt={s.alt ?? ""}
+                className="h-24 rounded border object-cover"
+                loading="lazy"
+              />
+            ))}
+          </div>
+        )}
+
+        <div className="space-y-1 text-xs">
+          <p className="font-semibold">Review checklist</p>
+          {MANUAL_CHECKS.map((c) => (
+            <label key={c} className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={checked.includes(c)}
+                onChange={(e) =>
+                  setChecked((prev) =>
+                    e.target.checked ? [...prev, c] : prev.filter((x) => x !== c),
+                  )
+                }
+              />
+              {c}
+            </label>
+          ))}
+        </div>
+
         <div className="flex flex-wrap gap-2 pt-1">
           <Button
             size="sm"
             onClick={() => onAct("approve", undefined, !lintPassed && override)}
-            disabled={pending || (!lintPassed && !override)}
+            disabled={pending || !allChecked || (!lintPassed && !override)}
             className="bg-green-600 hover:bg-green-700"
           >
             {pending ? (
@@ -245,7 +316,7 @@ function ReviewCard({ version, onAct, pending }: ReviewCardProps) {
             <DialogDescription>
               {dialog === "reject"
                 ? "The developer will see your note. They cannot resubmit this version — they have to publish a new one."
-                : "The developer will get an email with your note and the version moves back to draft. They can re-submit after editing."}
+                : "The developer will get an email with your note. They fix it and submit a new version."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
@@ -311,11 +382,11 @@ export default function MarketplaceReview() {
     }) => reviewVersion(versionId, { decision, notes, override_certification: override || undefined }),
     onMutate: ({ versionId }) => setActingId(versionId),
     onSettled: () => setActingId(null),
-    onSuccess: (data) => {
+    onSuccess: (_data, { decision }) => {
       const verb =
-        data.decision === "approve"
-          ? "approved"
-          : data.decision === "reject"
+        decision === "approve"
+          ? "approved; the partner can publish it now"
+          : decision === "reject"
             ? "rejected"
             : "sent back for changes";
       toast.success(`Version ${verb}`);
