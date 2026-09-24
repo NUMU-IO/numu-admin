@@ -51,6 +51,8 @@ import Security from "./pages/Security";
 import { TwoFactorStepUp } from "./components/TwoFactorStepUp";
 import TrustRisk from "./pages/TrustRisk";
 import SupportCases from "./pages/SupportCases";
+import PartnerSupport from "./pages/PartnerSupport";
+import AppReviews from "./pages/AppReviews";
 import Campaigns from "./pages/Campaigns";
 import Leads from "./pages/Leads";
 import Marketing from "./pages/Marketing";
@@ -172,6 +174,12 @@ function Router() {
       </Route>
       <Route path="/support-cases">
         {() => <ProtectedRoute component={SupportCases} />}
+      </Route>
+      <Route path="/partner-support">
+        {() => <ProtectedRoute component={PartnerSupport} />}
+      </Route>
+      <Route path="/app-reviews">
+        {() => <ProtectedRoute component={AppReviews} />}
       </Route>
       <Route path="/campaigns">
         {() => <ProtectedRoute component={Campaigns} />}
