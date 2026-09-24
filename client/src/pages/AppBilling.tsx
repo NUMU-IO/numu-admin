@@ -205,8 +205,8 @@ function Revenue() {
     <>
       <div className="ak-2col">
         <MetricCard label="Gross (12 months)" value={formatMoney(t?.gross_cents)} note={`Paid by merchants, net of refunds, incl. ${formatMoney(t?.vat_cents)} VAT`} icon="banknote" loading={q.isLoading} />
-        <MetricCard label="Partners' share" value={formatMoney(t?.partner_cents)} note="Partner App sales, net of refunds and coupons" icon="plug" loading={q.isLoading} />
-        <MetricCard label="NUMU" value={formatMoney(t?.numu_cents)} note="Fees on Partner Apps and all of NUMU Apps, before VAT" icon="package" loading={q.isLoading} />
+        <MetricCard label="Partners' share" value={formatMoney(t?.partner_cents)} note="Partner app and theme sales, net of refunds and coupons" icon="plug" loading={q.isLoading} />
+        <MetricCard label="NUMU" value={formatMoney(t?.numu_cents)} note="Fees on partner apps and themes, all of NUMU apps and themes, before VAT" icon="package" loading={q.isLoading} />
       </div>
       <DataTable
         dense
@@ -227,7 +227,20 @@ function Charges() {
   const [refunding, setRefunding] = useState<AppCharge | null>(null);
   const columns: DataTableColumn<AppCharge>[] = [
     { key: "created_at", header: "When", mono: true, render: (c) => formatDateTime(c.created_at) },
-    { key: "note", header: "Charge", render: (c) => c.note ?? "—" },
+    {
+      key: "note",
+      header: "Charge",
+      render: (c) => (
+        <>
+          {c.theme_id ? (
+            <Badge tone="info" square>
+              Theme
+            </Badge>
+          ) : null}{" "}
+          {c.note ?? "—"}
+        </>
+      ),
+    },
     { key: "tenant_id", header: "Tenant", mono: true },
     { key: "amount_cents", header: "Amount", align: "end", mono: true, render: (c) => formatMoney(c.amount_cents, c.currency) },
     {
@@ -250,7 +263,7 @@ function Charges() {
     <>
       <DataTable
         dense
-        caption="Recent app charges from merchants' wallets"
+        caption="Recent app charges and theme purchases from merchants' wallets"
         columns={columns}
         rows={q.data ?? []}
         rowKey={(c) => c.id}
