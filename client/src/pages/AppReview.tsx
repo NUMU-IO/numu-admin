@@ -74,7 +74,13 @@ const SLA_BUSINESS_DAYS = 3;
 function priceText(p: AppManifest["pricing"] | undefined): string {
   if (!p) return "—";
   const label = p.label?.en ? ` (listing: ${p.label.en})` : "";
-  if (p.model === "recurring") return `${formatMoney(p.price_cents)} / ${p.cycle === "annual" ? "year" : "month"}${label}`;
+  const usage = p.usage
+    ? `usage${p.usage.price_cents ? ` ${formatMoney(p.usage.price_cents)} per ${p.usage.unit.en}` : ""}, cap ${formatMoney(p.usage.cap_cents)} / month`
+    : "";
+  const trial = p.trial_days ? `${p.trial_days}-day free trial, then ` : "";
+  if (p.model === "usage") return `${usage}${label}`;
+  if (p.model === "recurring")
+    return `${trial}${formatMoney(p.price_cents)} / ${p.cycle === "annual" ? "year" : "month"}${usage ? ` + ${usage}` : ""}${label}`;
   if (p.model === "external") return `external${label || " (billed by the partner)"}`;
   return p.model;
 }

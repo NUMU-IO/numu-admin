@@ -40,6 +40,7 @@ import Partners from "./pages/Partners";
 import AppReview from "./pages/AppReview";
 import PartnerNotices from "./pages/PartnerNotices";
 import AppCatalog from "./pages/AppCatalog";
+import AppBilling from "./pages/AppBilling";
 import ThemesPage from "./pages/marketplace/ThemesPage";
 import ThemeDetailPage from "./pages/marketplace/ThemeDetailPage";
 import StoreSnapshotsPage from "./pages/marketplace/StoreSnapshotsPage";
@@ -198,6 +199,9 @@ function Router() {
       </Route>
       <Route path="/apps/catalog">
         {() => <ProtectedRoute component={AppCatalog} />}
+      </Route>
+      <Route path="/apps/billing">
+        {() => <ProtectedRoute component={AppBilling} />}
       </Route>
       <Route path="/wallets">
         {() => <ProtectedRoute component={WalletAdmin} />}
