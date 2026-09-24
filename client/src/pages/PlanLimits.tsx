@@ -253,7 +253,6 @@ export default function PlanLimits() {
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
                   {(
                     [
-                      ["webhooks_enabled", "Webhooks"],
                       ["custom_domain_enabled", "Custom Domain"],
                       ["api_access_enabled", "API Access"],
                       ["analytics_enabled", "Analytics"],
