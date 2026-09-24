@@ -13,18 +13,57 @@ import { apiClient } from "@/lib/apiClient";
 
 export type AppChangeType = "new_app" | "new_scopes" | "urls" | "pricing" | "listing_only";
 
+export type ReviewSubject = "version" | "listing" | "version_listing";
+
 export interface ReviewRow {
-  version_id: string;
+  review_id: string;
+  round: number;
   app_id: string;
   slug: string;
   name: { ar?: string; en?: string };
   icon: string | null;
   partner: string | null;
-  version: string;
+  subject: ReviewSubject;
+  version: string | null;
+  version_id: string | null;
+  listing_id: string | null;
   status: string;
   change_type: AppChangeType;
   submitted_at: string | null;
   age_days: number;
+  business_days_waiting: number;
+  due_at: string | null;
+  overdue: boolean;
+  name_change: boolean;
+}
+
+export interface Bilingual {
+  ar: string;
+  en: string;
+}
+
+export interface ListingContent {
+  name: Bilingual;
+  tagline: Bilingual;
+  description: Bilingual;
+  screenshots: { src: string; caption?: Bilingual }[];
+  video_url: string | null;
+  category: string;
+  keywords: { ar: string[]; en: string[] };
+}
+
+export interface ReviewRound {
+  review_id: string;
+  round: number;
+  subject: ReviewSubject;
+  version: string | null;
+  status: string;
+  submitted_at: string | null;
+  decided_at: string | null;
+  reviewer: string | null;
+  checklist: Record<string, boolean> | null;
+  notes: { ar?: string; en?: string } | null;
+  internal_note: string | null;
 }
 
 /** The subset of numu.app.json the review page reads. */
@@ -65,13 +104,16 @@ export interface ListingPricing {
   currency?: string;
 }
 
-export interface VersionDetail extends ReviewRow {
-  manifest: AppManifest;
+export interface ReviewDetail extends Omit<ReviewRow, "name_change"> {
+  manifest: AppManifest | null;
   published_manifest: AppManifest | null;
   release_notes: { ar?: string; en?: string } | null;
-  review_notes: { ar?: string; en?: string } | null;
-  review_checklist: Record<string, boolean> | null;
+  listing: ListingContent | null;
+  live_listing: ListingContent;
+  name_change: { from: Bilingual; to: Bilingual } | null;
   checklist: Record<string, string>;
+  required_checks: string[];
+  history: ReviewRound[];
 }
 
 export interface CatalogRow {
@@ -94,21 +136,22 @@ export function listReviewQueue(): Promise<ReviewRow[]> {
   return apiClient<ReviewRow[]>("/admin/apps/review");
 }
 
-/** Opening a submitted version claims it (in_review). */
-export function getVersion(versionId: string): Promise<VersionDetail> {
-  return apiClient<VersionDetail>(`/admin/apps/versions/${versionId}`);
+/** Opening a submitted review claims it (in_review). */
+export function getReview(reviewId: string): Promise<ReviewDetail> {
+  return apiClient<ReviewDetail>(`/admin/apps/reviews/${reviewId}`);
 }
 
-export function reviewAppVersion(
-  versionId: string,
+export function decideReview(
+  reviewId: string,
   body: {
     decision: "approve" | "request_changes" | "reject";
     checklist: Record<string, boolean>;
     notes_ar?: string;
     notes_en?: string;
+    internal_note?: string;
   },
 ): Promise<ReviewRow> {
-  return apiClient<ReviewRow>(`/admin/apps/versions/${versionId}/review`, {
+  return apiClient<ReviewRow>(`/admin/apps/reviews/${reviewId}/decision`, {
     method: "POST",
     body: JSON.stringify(body),
   });

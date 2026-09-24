@@ -39,12 +39,19 @@ import {
   updatePlatformSettings,
   type PlatformSettings,
 } from "@/services/platformSettingsApi";
+import {
+  getMetaCredentials,
+  updateMetaCredentials,
+  type MetaCredentials,
+} from "@/services/metaCredentialsApi";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Bell,
   Building2,
   Copy,
   CreditCard,
+  Eye,
+  EyeOff,
   Globe,
   Key,
   Loader2,
@@ -215,6 +222,103 @@ export default function Settings() {
     saveMutation.mutate(patch);
   };
   const saving = saveMutation.isPending;
+
+  const metaQuery = useQuery({
+    queryKey: ["meta-credentials"],
+    queryFn: getMetaCredentials,
+    enabled: isAuthenticated,
+  });
+  const [metaDraft, setMetaDraft] = useState<MetaCredentials | null>(null);
+  const [showWebhookToken, setShowWebhookToken] = useState(false);
+  const [showRegistrationPin, setShowRegistrationPin] = useState(false);
+  if (metaDraft === null && metaQuery.data) {
+    setMetaDraft({
+      ...metaQuery.data,
+      meta_app_secret: "",
+      meta_webhook_verify_token: "",
+      meta_phone_registration_pin: "",
+    });
+  }
+  const meta = metaDraft ?? {
+    meta_app_id: "",
+    meta_app_secret: "",
+    meta_webhook_verify_token: "",
+    meta_phone_registration_pin: "",
+    meta_login_config_id: "",
+    meta_config_id: "",
+    meta_graph_api_version: "v25.0",
+  };
+  const setMetaField = (key: keyof MetaCredentials, value: string) =>
+    setMetaDraft({ ...meta, [key]: value });
+  const metaSaveMutation = useMutation({
+    mutationFn: () =>
+      updateMetaCredentials({
+        meta_app_id: meta.meta_app_id.trim(),
+        meta_login_config_id: meta.meta_login_config_id.trim(),
+        meta_config_id: meta.meta_config_id.trim(),
+        meta_graph_api_version: meta.meta_graph_api_version.trim(),
+        ...(meta.meta_app_secret
+          ? { meta_app_secret: meta.meta_app_secret }
+          : {}),
+        ...(meta.meta_webhook_verify_token
+          ? { meta_webhook_verify_token: meta.meta_webhook_verify_token }
+          : {}),
+        ...(meta.meta_phone_registration_pin
+          ? { meta_phone_registration_pin: meta.meta_phone_registration_pin }
+          : {}),
+      }),
+    onSuccess: (saved) => {
+      queryClient.setQueryData(["meta-credentials"], saved);
+      setMetaDraft({
+        ...saved,
+        meta_app_secret: "",
+        meta_webhook_verify_token: "",
+        meta_phone_registration_pin: "",
+      });
+      toast.success("Meta credentials saved");
+    },
+    onError: (err) =>
+      toast.error((err as Error).message || "Failed to save Meta credentials"),
+  });
+  const generateWebhookToken = () => {
+    const bytes = crypto.getRandomValues(new Uint8Array(32));
+    setMetaField(
+      "meta_webhook_verify_token",
+      Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join(""),
+    );
+    setShowWebhookToken(true);
+  };
+  const copyWebhookToken = async () => {
+    if (!meta.meta_webhook_verify_token) {
+      toast.error("Generate a new token first. Saved tokens cannot be revealed.");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(meta.meta_webhook_verify_token);
+      toast.success("Webhook verify token copied");
+    } catch {
+      toast.error("Copy failed — show the token and copy it manually");
+      setShowWebhookToken(true);
+    }
+  };
+  const generateRegistrationPin = () => {
+    const value = crypto.getRandomValues(new Uint32Array(1))[0];
+    setMetaField("meta_phone_registration_pin", String(100000 + (value % 900000)));
+    setShowRegistrationPin(true);
+  };
+  const copyRegistrationPin = async () => {
+    if (!meta.meta_phone_registration_pin) {
+      toast.error("Generate a new PIN first. Saved PINs cannot be revealed.");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(meta.meta_phone_registration_pin);
+      toast.success("Phone registration PIN copied");
+    } catch {
+      toast.error("Copy failed — show the PIN and copy it manually");
+      setShowRegistrationPin(true);
+    }
+  };
 
   // Notification settings state
   const [notificationSettings, setNotificationSettings] = useState({
@@ -875,49 +979,81 @@ export default function Settings() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="grid gap-4 max-w-md">
+              <Banner tone="info" icon="lock" title="Stored securely and applied immediately">
+                Secrets are encrypted on the API and never returned to this page. Leave a secret blank to keep its current value. Environment values remain the fallback when an Admin override is empty.
+              </Banner>
+              {metaQuery.isError && <Banner tone="danger" title="Could not load Meta credentials">{(metaQuery.error as Error).message}</Banner>}
+              <div className="grid gap-5 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="metaAppId">META_APP_ID</Label>
-                  <Input id="metaAppId" placeholder="Enter your Meta App ID" />
+                  <Label htmlFor="metaAppId">Meta App ID</Label>
+                  <Input id="metaAppId" value={meta.meta_app_id} onChange={(e) => setMetaField("meta_app_id", e.target.value)} placeholder="990177437314014" />
+                  <p className="text-xs text-muted-foreground">Meta App Dashboard → Settings → Basic.</p>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="metaAppSecret">META_APP_SECRET</Label>
-                  <Input
-                    id="metaAppSecret"
-                    type="password"
-                    placeholder="Enter your Meta App Secret"
-                  />
+                  <Label htmlFor="metaAppSecret" className="flex items-center gap-2">App Secret {metaQuery.data?.meta_app_secret && <Badge variant="secondary">Configured</Badge>}</Label>
+                  <Input id="metaAppSecret" type="password" autoComplete="new-password" value={meta.meta_app_secret} onChange={(e) => setMetaField("meta_app_secret", e.target.value)} placeholder={metaQuery.data?.meta_app_secret ? "Leave blank to keep current secret" : "Enter Meta App Secret"} />
+                  <p className="text-xs text-muted-foreground">Reveal it in Meta App Dashboard → Settings → Basic.</p>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="webhookVerifyToken">META_WEBHOOK_VERIFY_TOKEN</Label>
-                  <Input
-                    id="webhookVerifyToken"
-                    placeholder="Enter webhook verify token"
-                  />
+                  <Label htmlFor="embeddedSignupConfig">WhatsApp Embedded Signup Config ID</Label>
+                  <Input id="embeddedSignupConfig" value={meta.meta_config_id} onChange={(e) => setMetaField("meta_config_id", e.target.value)} placeholder="2684108888713016" />
+                  <p className="text-xs text-muted-foreground">Use cases → Connect on WhatsApp → Embedded Signup configuration.</p>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="loginConfigId">META_LOGIN_CONFIG_ID</Label>
-                  <Input
-                    id="loginConfigId"
-                    placeholder="Enter Login Config ID"
-                  />
+                  <Label htmlFor="loginConfigId">Facebook / Instagram Login Config ID</Label>
+                  <Input id="loginConfigId" value={meta.meta_login_config_id} onChange={(e) => setMetaField("meta_login_config_id", e.target.value)} placeholder="Optional for social channel OAuth" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="graphVersion">Graph API Version</Label>
+                  <Input id="graphVersion" value={meta.meta_graph_api_version} onChange={(e) => setMetaField("meta_graph_api_version", e.target.value)} placeholder="v25.0" />
+                  <p className="text-xs text-muted-foreground">Pinned for Embedded Signup and Graph API calls.</p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="webhookVerifyToken" className="flex items-center gap-2">Webhook Verify Token {metaQuery.data?.meta_webhook_verify_token && <Badge variant="secondary">Configured</Badge>}</Label>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <div className="relative min-w-0 flex-1">
+                      <Input id="webhookVerifyToken" className="pr-10" type={showWebhookToken ? "text" : "password"} autoComplete="new-password" value={meta.meta_webhook_verify_token} onChange={(e) => setMetaField("meta_webhook_verify_token", e.target.value)} placeholder={metaQuery.data?.meta_webhook_verify_token ? "Saved securely — generate a replacement to copy" : "Generate a secure token"} />
+                      <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2" onClick={() => setShowWebhookToken((shown) => !shown)} disabled={!meta.meta_webhook_verify_token} aria-label={showWebhookToken ? "Hide webhook token" : "Show webhook token"}>
+                        {showWebhookToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                    <Button type="button" variant="outline" onClick={copyWebhookToken} disabled={!meta.meta_webhook_verify_token}><Copy className="mr-2 h-4 w-4" />Copy</Button>
+                    <Button type="button" variant="outline" onClick={generateWebhookToken}>Generate</Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Generate, copy, then save. Existing saved tokens stay encrypted and cannot be displayed again.</p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="phoneRegistrationPin" className="flex items-center gap-2">Cloud API Phone PIN {metaQuery.data?.meta_phone_registration_pin && <Badge variant="secondary">Configured</Badge>}</Label>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <div className="relative min-w-0 flex-1">
+                      <Input id="phoneRegistrationPin" className="pr-10" type={showRegistrationPin ? "text" : "password"} inputMode="numeric" maxLength={6} autoComplete="new-password" value={meta.meta_phone_registration_pin} onChange={(e) => setMetaField("meta_phone_registration_pin", e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder={metaQuery.data?.meta_phone_registration_pin ? "Saved securely — generate a replacement to copy" : "Generate a six digit PIN"} />
+                      <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2" onClick={() => setShowRegistrationPin((shown) => !shown)} disabled={!meta.meta_phone_registration_pin} aria-label={showRegistrationPin ? "Hide phone PIN" : "Show phone PIN"}>
+                        {showRegistrationPin ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                    <Button type="button" variant="outline" onClick={copyRegistrationPin} disabled={!meta.meta_phone_registration_pin}><Copy className="mr-2 h-4 w-4" />Copy</Button>
+                    <Button type="button" variant="outline" onClick={generateRegistrationPin}>Generate</Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Used server side to register customer phone numbers with WhatsApp Cloud API.</p>
                 </div>
               </div>
-              {/* This panel has no backend. The four fields above were never
-                  persisted, and the save button called the platform-settings
-                  mutation — so typing an App ID here and pressing save renamed
-                  the platform. The fields stay as a reference for what the API
-                  reads; the misleading save is gone. */}
-              <Banner
-                tone="info"
-                icon="lock"
-                title="Meta credentials are configured on the API, not here"
-              >
-                META_APP_ID, META_APP_SECRET, META_WEBHOOK_VERIFY_TOKEN and
-                META_LOGIN_CONFIG_ID are read from the API's environment at boot.
-                Change them on the API host and restart; nothing typed on this
-                screen is saved.
-              </Banner>
+              <div className="rounded-lg border bg-muted/30 p-4">
+                <p className="text-sm font-medium">Meta dashboard checklist</p>
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-muted-foreground">
+                  <li>Allowed domain for the JavaScript SDK: merchant.numueg.app</li>
+                  <li>Valid OAuth redirect URI: https://merchant.numueg.app/</li>
+                  <li>Webhook callback: https://numueg.app/api/v1/webhooks/whatsapp/callback</li>
+                  <li>Subscribe the WhatsApp webhook to the messages field.</li>
+                </ul>
+              </div>
+              <Separator />
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-muted-foreground">App Secret, Verify Token, and Phone PIN are encrypted and never returned in plaintext.</p>
+                <Button onClick={() => metaSaveMutation.mutate()} disabled={metaSaveMutation.isPending || metaQuery.isLoading || !meta.meta_app_id.trim() || !meta.meta_config_id.trim() || !meta.meta_graph_api_version.trim() || (!!meta.meta_phone_registration_pin && meta.meta_phone_registration_pin.length !== 6)}>
+                  {metaSaveMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Key className="mr-2 h-4 w-4" />}
+                  Save Meta credentials
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
