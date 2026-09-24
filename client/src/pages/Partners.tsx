@@ -19,6 +19,11 @@
  * or suspended partner has a Ledger: what NUMU owes them, and the forms that
  * record a bank transfer already sent (payout) or a signed correction
  * (adjustment). No money moves from this page.
+ *
+ * Referrals & directory: per partner, the referral terms (share of referred
+ * merchants' plan payments and for how long), the stores they referred
+ * (reassign by subdomain), the Verified badge, and hiding their public
+ * "Hire an expert" profile.
  */
 
 import DashboardLayout from "@/components/DashboardLayout";
@@ -46,21 +51,30 @@ import {
   type StatusBadgeProps,
 } from "@/ds";
 import { formatDateTime, formatMoney, parseMoney } from "@/lib/format";
+import { RefundChargeDialog } from "@/pages/AppBilling";
 import { is2FAError } from "@/services/platformCapabilitiesApi";
 import {
+  assignReferral,
   decidePartner,
+  downloadStatementCsv,
   getLedger,
+  getReferrals,
+  getStatement,
   getPartnerBilling,
   getProgram,
   listPartners,
   recordAdjustment,
   recordPayout,
+  removeReferral,
+  setDirectoryFlags,
   setPartnerBilling,
   setProgram,
+  setReferralTerms,
   suspendPartner,
   type AdminPartner,
   type LedgerEntry,
   type PartnerStatus,
+  type ReferredStore,
 } from "@/services/partnersApi";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -213,6 +227,7 @@ function BillingSwitch() {
 
 const KIND: Record<string, { label: string; tone: "success" | "info" | "warning" | "neutral" }> = {
   sale: { label: "Sale", tone: "success" },
+  referral: { label: "Referral", tone: "success" },
   payout: { label: "Payout", tone: "info" },
   adjustment: { label: "Adjustment", tone: "warning" },
 };
@@ -249,6 +264,51 @@ const LEDGER_COLUMNS: DataTableColumn<LedgerEntry>[] = [
   },
 ];
 
+/** One month of the partner's ledger, as the partner sees it, plus CSV. */
+function StatementCard({ partner }: { partner: AdminPartner }) {
+  const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const valid = /^\d{4}-(0[1-9]|1[0-2])$/.test(month);
+  const q = useQuery({
+    queryKey: ["partners", "statement", partner.id, month],
+    queryFn: () => getStatement(partner.id, month),
+    enabled: valid,
+  });
+  const s = q.data;
+  return (
+    <Card variant="outlined" title="Monthly statement">
+      <div className="space-y-3">
+        <FormField label="Month" htmlFor="statement-month" hint="YYYY-MM, UTC">
+          <Input id="statement-month" type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
+        </FormField>
+        {q.isError ? <p className="text-sm text-destructive">{String(q.error)}</p> : null}
+        {s ? (
+          <KeyValue
+            items={[
+              { label: "Opening balance", value: formatMoney(s.opening_balance_cents), mono: true },
+              { label: "Gross sales", value: formatMoney(s.gross_sales_cents), mono: true },
+              { label: "NUMU fees (20%)", value: formatMoney(s.platform_fees_cents), mono: true },
+              { label: "Net sales (80%)", value: signedMoney(s.net_sales_cents), mono: true },
+              { label: "Refunds", value: signedMoney(s.refunds_cents), mono: true },
+              { label: "Adjustments", value: signedMoney(s.adjustments_cents), mono: true },
+              { label: "Payouts", value: signedMoney(s.payouts_cents), mono: true },
+              { label: "Closing balance", value: formatMoney(s.closing_balance_cents), mono: true },
+            ]}
+          />
+        ) : null}
+        <Button
+          size="sm"
+          variant="subtle"
+          icon="download"
+          disabled={!valid}
+          onClick={() => downloadStatementCsv(partner.id, month).catch(onError)}
+        >
+          Download CSV
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
 type EntryKind = "payout" | "adjustment";
 type Draft = { kind: EntryKind; amount_cents: number; reference: string; note: string };
 
@@ -266,6 +326,7 @@ function LedgerDrawer({ partner, onClose }: { partner: AdminPartner; onClose: ()
   const [reference, setReference] = useState("");
   const [note, setNote] = useState("");
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [refunding, setRefunding] = useState<LedgerEntry | null>(null);
 
   const record = useMutation({
     mutationFn: (d: Draft) =>
@@ -436,7 +497,27 @@ function LedgerDrawer({ partner, onClose }: { partner: AdminPartner; onClose: ()
         <DataTable
           dense
           caption="Ledger entries, newest first"
-          columns={LEDGER_COLUMNS}
+          columns={[
+            ...LEDGER_COLUMNS,
+            {
+              key: "charge_id",
+              header: "",
+              align: "end",
+              render: (e) => {
+                if (e.kind !== "sale" || !e.charge_id) return null;
+                const done = data?.entries.some((x) => x.reference === `refund:${e.charge_id}`);
+                return done ? (
+                  <Badge tone="neutral" square>
+                    Refunded
+                  </Badge>
+                ) : (
+                  <Button size="sm" variant="subtle" onClick={() => setRefunding(e)}>
+                    Refund…
+                  </Button>
+                );
+              },
+            },
+          ]}
           rows={data?.entries ?? []}
           rowKey={(e) => e.id}
           loading={ledger.isLoading}
@@ -452,7 +533,21 @@ function LedgerDrawer({ partner, onClose }: { partner: AdminPartner; onClose: ()
         {data && data.entries.length >= 100 ? (
           <p className="text-sm text-muted-foreground">The latest 100 entries. The totals above count every entry.</p>
         ) : null}
+
+        <StatementCard partner={partner} />
       </Drawer>
+
+      {refunding?.charge_id ? (
+        <RefundChargeDialog
+          charge={{
+            id: refunding.charge_id,
+            amount_cents: refunding.gross_cents ?? 0,
+            label: `${refunding.app_name ?? "App"} · ${formatDateTime(refunding.created_at)}`,
+          }}
+          onClose={() => setRefunding(null)}
+          onDone={() => void queryClient.invalidateQueries({ queryKey: ["partners"] })}
+        />
+      ) : null}
 
       {draft && data ? (
         <ConfirmDialog
@@ -487,6 +582,190 @@ function LedgerDrawer({ partner, onClose }: { partner: AdminPartner; onClose: ()
   );
 }
 
+const REFERRAL_COLUMNS: DataTableColumn<ReferredStore>[] = [
+  { key: "store_name", header: "Store", render: (r) => r.store_name },
+  { key: "signed_up_at", header: "Signed up", mono: true, render: (r) => formatDateTime(r.signed_up_at) },
+  { key: "plan", header: "Plan", render: (r) => `${r.plan} · ${r.status}` },
+  {
+    key: "first_paid_at",
+    header: "First payment",
+    mono: true,
+    render: (r) => (r.first_paid_at ? formatDateTime(r.first_paid_at) : "—"),
+  },
+  { key: "earned_cents", header: "Earned", align: "end", mono: true, render: (r) => formatMoney(r.earned_cents) },
+];
+
+/**
+ * Referral terms, referred stores and the public directory flags of one
+ * partner. Every write needs the 2FA step-up and is audited.
+ */
+function ReferralsDrawer({ partner, onClose }: { partner: AdminPartner; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const key = ["partners", "referrals", partner.id];
+  const referrals = useQuery({ queryKey: key, queryFn: () => getReferrals(partner.id) });
+  const [pct, setPct] = useState(String((partner.referral_bps ?? 2000) / 100));
+  const [months, setMonths] = useState(String(partner.referral_months ?? 12));
+  const [subdomain, setSubdomain] = useState("");
+  const [flags, setFlags] = useState({ verified: !!partner.verified, directory_hidden: !!partner.directory_hidden });
+  const refresh = () => {
+    void queryClient.invalidateQueries({ queryKey: key });
+    void queryClient.invalidateQueries({ queryKey: ["partners", "list"] });
+  };
+  const done = (msg: string) => {
+    toast.success(msg, { description: "Recorded in the audit log against your account" });
+    refresh();
+  };
+
+  const bps = Math.round(Number(pct) * 100);
+  const monthsN = Number(months);
+  const termsOk = pct.trim() !== "" && bps >= 0 && bps <= 10_000 && Number.isInteger(monthsN) && monthsN >= 1 && monthsN <= 60;
+
+  const terms = useMutation({
+    mutationFn: () => setReferralTerms(partner.id, { referral_bps: bps, referral_months: monthsN }),
+    onSuccess: () => done("Referral terms saved"),
+    onError,
+  });
+  const assign = useMutation({
+    mutationFn: () => assignReferral(partner.id, subdomain.trim().toLowerCase()),
+    onSuccess: () => {
+      setSubdomain("");
+      done("Store attributed to this partner");
+    },
+    onError,
+  });
+  const remove = useMutation({
+    mutationFn: (tenantId: string) => removeReferral(partner.id, tenantId),
+    onSuccess: () => done("Store detached"),
+    onError,
+  });
+  const directory = useMutation({
+    mutationFn: (body: { verified?: boolean; directory_hidden?: boolean }) => setDirectoryFlags(partner.id, body),
+    onSuccess: (updated) => {
+      setFlags({ verified: !!updated.verified, directory_hidden: !!updated.directory_hidden });
+      done("Directory settings saved");
+    },
+    onError,
+  });
+
+  const data = referrals.data;
+  return (
+    <Drawer
+      title={`Referrals & directory · ${partner.display_name}`}
+      subtitle={data ? `Referral code ${data.code}` : partner.id}
+      width={760}
+      onClose={onClose}
+      footer={
+        <Button variant="ghost" onClick={onClose}>
+          Close
+        </Button>
+      }
+    >
+      <Card variant="outlined" title="Public directory">
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            {partner.directory_listed
+              ? "The partner opted in to the Hire an expert directory."
+              : "The partner has not opted in; the flags apply once they do."}
+          </p>
+          <div className="ak-cell-line">
+            <Button
+              size="sm"
+              variant={flags.verified ? "outline" : "primary"}
+              icon="check"
+              loading={directory.isPending}
+              onClick={() => directory.mutate({ verified: !flags.verified })}
+            >
+              {flags.verified ? "Revoke Verified" : "Grant Verified"}
+            </Button>
+            <Button
+              size="sm"
+              variant={flags.directory_hidden ? "primary" : "danger-outline"}
+              icon="slash"
+              loading={directory.isPending}
+              onClick={() => directory.mutate({ directory_hidden: !flags.directory_hidden })}
+            >
+              {flags.directory_hidden ? "Show profile" : "Hide profile"}
+            </Button>
+          </div>
+        </div>
+      </Card>
+
+      <Card variant="outlined" title="Referral terms">
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            The partner earns this share of each referred merchant's plan payments, for this many months after the
+            merchant's first paid invoice. Applies to payments from now on.
+          </p>
+          <div className="ak-2col">
+            <FormField label="Share (%)" htmlFor="ref-pct" hint="Default 20">
+              <Input id="ref-pct" dir="ltr" numeric inputMode="decimal" value={pct} onChange={(e) => setPct(e.target.value)} />
+            </FormField>
+            <FormField label="Months" htmlFor="ref-months" hint="Default 12">
+              <Input
+                id="ref-months"
+                dir="ltr"
+                numeric
+                inputMode="numeric"
+                value={months}
+                onChange={(e) => setMonths(e.target.value)}
+              />
+            </FormField>
+          </div>
+          <Button size="sm" variant="primary" disabled={!termsOk} loading={terms.isPending} onClick={() => terms.mutate()}>
+            Save terms
+          </Button>
+        </div>
+      </Card>
+
+      <Card variant="outlined" title="Attribute a store">
+        <div className="space-y-3">
+          <FormField label="Store subdomain" htmlFor="ref-subdomain" hint="Replaces the store's current referrer, if any.">
+            <Input id="ref-subdomain" dir="ltr" mono value={subdomain} onChange={(e) => setSubdomain(e.target.value)} />
+          </FormField>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!subdomain.trim()}
+            loading={assign.isPending}
+            onClick={() => assign.mutate()}
+          >
+            Attribute
+          </Button>
+        </div>
+      </Card>
+
+      {referrals.isError ? (
+        <EmptyState
+          kind="error"
+          title="Referrals failed to load"
+          body={referrals.error instanceof Error ? referrals.error.message : "The request did not complete."}
+        />
+      ) : null}
+      <DataTable
+        dense
+        caption="Referred stores, newest first"
+        columns={[
+          ...REFERRAL_COLUMNS,
+          {
+            key: "tenant_id",
+            header: "",
+            align: "end",
+            render: (r) => (
+              <Button size="sm" variant="ghost" disabled={remove.isPending} onClick={() => remove.mutate(r.tenant_id)}>
+                Detach
+              </Button>
+            ),
+          },
+        ]}
+        rows={data?.stores ?? []}
+        rowKey={(r) => r.tenant_id}
+        loading={referrals.isLoading}
+        empty={<EmptyState kind="empty" icon="inbox" title="No referred stores" body="Stores that sign up with this partner's link appear here." />}
+      />
+    </Drawer>
+  );
+}
+
 function PartnerCard({
   partner,
   busy,
@@ -494,6 +773,7 @@ function PartnerCard({
   onReinstate,
   onNote,
   onLedger,
+  onReferrals,
 }: {
   partner: AdminPartner;
   busy: boolean;
@@ -501,6 +781,7 @@ function PartnerCard({
   onReinstate: () => void;
   onNote: (kind: "reject" | "suspend") => void;
   onLedger: () => void;
+  onReferrals: () => void;
 }) {
   const facts: KeyValueItem[] = [
     { label: "Kind", value: partner.kind === "company" ? "Company" : "Individual" },
@@ -513,6 +794,12 @@ function PartnerCard({
     { label: "Agreement", value: partner.agreement_version ?? "—", mono: true },
     { label: "Applied", value: formatDateTime(partner.created_at), mono: true },
     { label: "Dev stores / themes", value: `${partner.dev_store_count} / ${partner.theme_count}`, mono: true },
+    {
+      label: "Directory",
+      value: `${partner.directory_listed ? "Listed" : "Not listed"}${partner.verified ? " · Verified" : ""}${
+        partner.directory_hidden ? " · Hidden by NUMU" : ""
+      }`,
+    },
   ];
   if (partner.review_notes?.en) {
     facts.push({ label: "Notes (en)", value: partner.review_notes.en });
@@ -549,9 +836,14 @@ function PartnerCard({
             </Button>
           ) : null}
           {partner.status === "approved" || partner.status === "suspended" ? (
-            <Button size="sm" variant="subtle" icon="banknote" onClick={onLedger}>
-              Ledger
-            </Button>
+            <>
+              <Button size="sm" variant="subtle" icon="banknote" onClick={onLedger}>
+                Ledger
+              </Button>
+              <Button size="sm" variant="subtle" icon="users" onClick={onReferrals}>
+                Referrals &amp; directory
+              </Button>
+            </>
           ) : null}
         </div>
       }
@@ -569,6 +861,7 @@ export default function Partners() {
   const [noteAr, setNoteAr] = useState("");
   const [noteEn, setNoteEn] = useState("");
   const [ledgerFor, setLedgerFor] = useState<AdminPartner | null>(null);
+  const [referralsFor, setReferralsFor] = useState<AdminPartner | null>(null);
 
   const partnersQuery = useQuery({
     queryKey: ["partners", "list", filter],
@@ -670,11 +963,13 @@ export default function Partners() {
               setDialog({ partner: p, kind });
             }}
             onLedger={() => setLedgerFor(p)}
+            onReferrals={() => setReferralsFor(p)}
           />
         ))}
       </div>
 
       {ledgerFor ? <LedgerDrawer partner={ledgerFor} onClose={() => setLedgerFor(null)} /> : null}
+      {referralsFor ? <ReferralsDrawer partner={referralsFor} onClose={() => setReferralsFor(null)} /> : null}
 
       <Dialog
         open={dialog !== null}
