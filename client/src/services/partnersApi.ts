@@ -150,3 +150,33 @@ export function suspendPartner(
     body: JSON.stringify(body),
   });
 }
+
+export type NoticeKind = "changelog" | "deprecation";
+
+export interface PartnerNotice {
+  notice_id: string;
+  notice_kind: NoticeKind;
+  title: { ar: string; en: string };
+  body: { ar: string; en: string };
+  link: string | null;
+  created_at: string;
+  recipients: number;
+}
+
+export function listNotices(): Promise<PartnerNotice[]> {
+  return apiClient<PartnerNotice[]>("/admin/partners/notices");
+}
+
+export function postNotice(body: {
+  notice_kind: NoticeKind;
+  title_ar: string;
+  title_en: string;
+  body_ar: string;
+  body_en: string;
+  link?: string;
+}): Promise<{ notice_id: string; recipients: number }> {
+  return apiClient("/admin/partners/notices", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}

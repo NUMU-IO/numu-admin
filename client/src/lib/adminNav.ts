@@ -165,6 +165,7 @@ export const ADMIN_NAV: AdminNavSection[] = [
       { id: "partners", label: "Partners", icon: "plug", href: "/apps/partners" },
       { id: "app-review", label: "App review", icon: "shieldAlert", href: "/apps/review" },
       { id: "app-catalog", label: "App catalog", icon: "package", href: "/apps/catalog" },
+      { id: "partner-notices", label: "Partner notices", icon: "bell", href: "/apps/notices" },
     ],
   },
   {
