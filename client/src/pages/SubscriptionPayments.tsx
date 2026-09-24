@@ -20,7 +20,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
-import { Tabs as NumuTabs } from "@/ds";
+import { Banner, Tabs as NumuTabs } from "@/ds";
 import { DashboardLayoutSkeleton } from "@/components/DashboardLayoutSkeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -81,6 +81,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { Link } from "wouter";
 
 const fmtEGP = (cents: number | null | undefined) =>
   cents == null ? "—" : `${(cents / 100).toLocaleString("en-EG", { minimumFractionDigits: 2 })} EGP`;
@@ -898,7 +899,15 @@ export default function SubscriptionPayments() {
     >
       <div className="ak-stack">
         {tab === "review" && <ReviewQueue />}
-        {tab === "plans" && <PlansTab />}
+        {tab === "plans" && (
+          <>
+            <Banner tone="info" title="Limits and feature switches now live in Features & plans">
+              Edit them per plan and add-on, with per-merchant overrides, in{" "}
+              <Link href="/features">Features & plans</Link>. Prices stay here.
+            </Banner>
+            <PlansTab />
+          </>
+        )}
         {tab === "lifecycle" && <LifecycleTab />}
       </div>
     </DashboardLayout>

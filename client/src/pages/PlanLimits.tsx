@@ -22,6 +22,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { getLoginUrl } from "@/const";
+import { Banner } from "@/ds";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getPlanLimits,
@@ -31,6 +32,7 @@ import {
 import { Save, Shield, Sliders } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { Link } from "wouter";
 
 const planColors: Record<string, string> = {
   demo: "bg-gray-100 text-gray-700",
@@ -110,6 +112,11 @@ export default function PlanLimits() {
       subtitle="Control features, limits, and pricing for each subscription plan. Changes are live immediately."
     >
       <div className="space-y-6">
+        <Banner tone="info" title="Limits and feature switches now live in Features & plans">
+          Edit them per plan and add-on, with per-merchant overrides, in{" "}
+          <Link href="/features">Features & plans</Link>. This page still works and writes to the same catalog.
+        </Banner>
+
         {/* Save bar */}
         {hasChanges && (
           <div className="sticky top-0 z-10 bg-background border border-border py-3 px-4 flex items-center justify-between rounded-lg shadow-sm">

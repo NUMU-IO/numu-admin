@@ -62,6 +62,7 @@ export const ADMIN_NAV: AdminNavSection[] = [
     items: [
       { id: "billing", label: "Billing", icon: "creditCard", href: "/billing" },
       { id: "plans", label: "Pricing plans", icon: "tag", href: "/pricing-plans" },
+      { id: "features", label: "Features & plans", icon: "sliders", href: "/features" },
       { id: "limits", label: "Plan limits", icon: "sliders", href: "/plan-limits" },
       {
         id: "wallets",
@@ -181,6 +182,7 @@ export const ADMIN_NAV: AdminNavSection[] = [
         icon: "plug",
         href: "/platform/capabilities",
       },
+      { id: "flags", label: "Release flags", icon: "flag", href: "/flags" },
       {
         id: "security",
         label: "Security (2FA)",
