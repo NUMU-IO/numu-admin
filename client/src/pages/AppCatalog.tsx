@@ -264,6 +264,15 @@ function AppCard({ app, onSuspend, onPrice }: { app: CatalogRow; onSuspend: () =
             description="Published Partner Apps stay hidden from merchants until this is on."
           />
         ) : null}
+        {!app.first_party ? (
+          <Switch
+            checked={!!f.built_by_numu}
+            disabled={flags.isPending}
+            onChange={(v) => flags.mutate({ built_by_numu: v })}
+            label="Built by NUMU"
+            description="Merchants see NUMU as the developer, like Nimo. For apps NUMU builds on the partner platform."
+          />
+        ) : null}
         <Switch checked={!!f.featured} disabled={flags.isPending} onChange={(v) => flags.mutate({ featured: v })} label="Featured" />
         <Switch checked={!!f.staff_pick} disabled={flags.isPending} onChange={(v) => flags.mutate({ staff_pick: v })} label="Staff pick" />
       </div>
