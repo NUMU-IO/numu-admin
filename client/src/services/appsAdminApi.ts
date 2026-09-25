@@ -125,7 +125,7 @@ export interface CatalogRow {
   status: "draft" | "published" | "suspended";
   version: string;
   category: string | null;
-  listing_flags: { catalog_visible?: boolean; featured?: boolean; staff_pick?: boolean };
+  listing_flags: { catalog_visible?: boolean; featured?: boolean; staff_pick?: boolean; built_by_numu?: boolean };
   installs_active: number;
   installs_total: number;
   /** Only when the catalog response carries it; NUMU-api #648 does not yet. */
