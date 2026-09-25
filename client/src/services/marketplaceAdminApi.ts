@@ -37,9 +37,14 @@ export interface PendingThemeVersion {
   version_id: string;
   marketplace_theme_id: string;
   theme_name: string;
+  theme_name_ar?: string | null;
   theme_slug: string;
   version_string: string;
   release_notes: string | null;
+  demo_store_url?: string | null;
+  theme_screenshots?: { url: string; alt?: string | null }[];
+  lint_issues?: { issues?: { rule?: string; severity?: string; message?: string }[] } | null;
+  created_at?: string | null;
   developer_id: string;
   developer_name: string | null;
   developer_email: string | null;
@@ -301,6 +306,8 @@ export interface PendingReviewItem {
   theme_supported_features: Record<string, unknown>;
   theme_status: string | null;
   price_cents: number;
+  /** The partner's new price; approving this version applies it. */
+  pending_price_cents?: number | null;
   currency: string;
   // Marketing
   thumbnail_url: string | null;

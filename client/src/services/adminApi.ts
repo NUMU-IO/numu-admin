@@ -465,6 +465,59 @@ export async function adminTriggerReconciliation(
   });
 }
 
+export interface AdminTransactionOrderRow {
+  transaction_id: string;
+  created_at: string;
+  gateway: string;
+  channel: string;
+  tx_status: string;
+  amount_cents: number;
+  currency: string;
+  gateway_transaction_id: string | null;
+  store_id: string;
+  store_name: string | null;
+  order_id: string | null;
+  order_number: string | null;
+  order_status: string | null;
+  payment_status: string | null;
+  order_total_cents: number | null;
+  /** paid_not_recorded = gateway took the money, order not paid. */
+  mismatch: "paid_not_recorded" | "order_missing" | null;
+}
+
+export interface AdminTransactionPage {
+  items: AdminTransactionOrderRow[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+export async function adminListReconciliationTransactions(params: {
+  gateway?: string;
+  mismatch_only?: boolean;
+  days?: number;
+  page?: number;
+  limit?: number;
+}): Promise<AdminTransactionPage> {
+  const qs = new URLSearchParams();
+  if (params.gateway) qs.set("gateway", params.gateway);
+  if (params.mismatch_only) qs.set("mismatch_only", "true");
+  if (params.days) qs.set("days", String(params.days));
+  if (params.page) qs.set("page", String(params.page));
+  if (params.limit) qs.set("limit", String(params.limit));
+  return apiClient<AdminTransactionPage>(`/admin/reconciliation/transactions?${qs}`);
+}
+
+export async function adminReconcileMarkPaid(
+  transactionId: string
+): Promise<AdminTransactionOrderRow> {
+  return apiClient<AdminTransactionOrderRow>(
+    `/admin/reconciliation/transactions/${transactionId}/mark-paid`,
+    { method: "POST" }
+  );
+}
+
 // ─── Beta Program / Waitlist ─────────────────────────────────────────────────
 
 export interface WaitlistEntry {

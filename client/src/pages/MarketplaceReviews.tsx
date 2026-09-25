@@ -5,8 +5,8 @@
  *   - Inspect the version metadata (size, checksum, release notes,
  *     bundle URL → opens in a new tab so admins can verify the actual
  *     JS asset before approving).
- *   - Approve → publishes the version (and marks the listing
- *     `published` if it was still in `draft`).
+ *   - Approve → the version becomes `approved`; the partner publishes
+ *     it from the partner portal.
  *   - Reject → records the rejection reason; the developer sees it on
  *     their submission's status page.
  *
@@ -142,6 +142,11 @@ function ReviewCard({ item, onDecision, pendingDecision }: ReviewCardProps) {
                 {item.price_cents > 0
                   ? `${(item.price_cents / 100).toFixed(2)} ${item.currency}`
                   : "Free"}
+                {item.pending_price_cents != null && item.pending_price_cents !== item.price_cents ? (
+                  <Badge variant="outline" className="ms-2">
+                    {`→ ${item.pending_price_cents > 0 ? `${(item.pending_price_cents / 100).toFixed(2)} EGP` : "Free"} on approval`}
+                  </Badge>
+                ) : null}
               </Field>
               <Field label="Category">
                 {item.theme_category ?? "—"}
@@ -521,7 +526,7 @@ export default function MarketplaceReviews() {
     onSuccess: (_data, vars) => {
       toast.success(
         vars.decision === "approve"
-          ? "Version approved and published"
+          ? "Version approved; the partner can publish it now"
           : "Version rejected",
       );
       queryClient.invalidateQueries({

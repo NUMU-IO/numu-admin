@@ -24,6 +24,9 @@ import Reports from "./pages/Reports";
 import Reconciliation from "./pages/Reconciliation";
 import BetaProgram from "./pages/BetaProgram";
 import PlanLimits from "./pages/PlanLimits";
+import Features from "./pages/Features";
+import FeatureDetail from "./pages/FeatureDetail";
+import Flags from "./pages/Flags";
 import PricingPlans from "./pages/PricingPlans";
 import MerchantHubNav from "./pages/MerchantHubNav";
 import Themes from "./pages/Themes";
@@ -35,7 +38,9 @@ import WhatsappAccessRequests from "./pages/WhatsappAccessRequests";
 import ApiTokens from "./pages/ApiTokens";
 import Partners from "./pages/Partners";
 import AppReview from "./pages/AppReview";
+import PartnerNotices from "./pages/PartnerNotices";
 import AppCatalog from "./pages/AppCatalog";
+import AppBilling from "./pages/AppBilling";
 import ThemesPage from "./pages/marketplace/ThemesPage";
 import ThemeDetailPage from "./pages/marketplace/ThemeDetailPage";
 import StoreSnapshotsPage from "./pages/marketplace/StoreSnapshotsPage";
@@ -46,6 +51,8 @@ import Security from "./pages/Security";
 import { TwoFactorStepUp } from "./components/TwoFactorStepUp";
 import TrustRisk from "./pages/TrustRisk";
 import SupportCases from "./pages/SupportCases";
+import PartnerSupport from "./pages/PartnerSupport";
+import AppReviews from "./pages/AppReviews";
 import Campaigns from "./pages/Campaigns";
 import Leads from "./pages/Leads";
 import Marketing from "./pages/Marketing";
@@ -126,6 +133,15 @@ function Router() {
       <Route path="/plan-limits">
         {() => <ProtectedRoute component={PlanLimits} />}
       </Route>
+      <Route path="/features">
+        {() => <ProtectedRoute component={Features} />}
+      </Route>
+      <Route path="/features/:key">
+        {() => <ProtectedRoute component={FeatureDetail} />}
+      </Route>
+      <Route path="/flags">
+        {() => <ProtectedRoute component={Flags} />}
+      </Route>
       <Route path="/merchant-hub-nav">
         {() => <ProtectedRoute component={MerchantHubNav} />}
       </Route>
@@ -159,6 +175,12 @@ function Router() {
       <Route path="/support-cases">
         {() => <ProtectedRoute component={SupportCases} />}
       </Route>
+      <Route path="/partner-support">
+        {() => <ProtectedRoute component={PartnerSupport} />}
+      </Route>
+      <Route path="/app-reviews">
+        {() => <ProtectedRoute component={AppReviews} />}
+      </Route>
       <Route path="/campaigns">
         {() => <ProtectedRoute component={Campaigns} />}
       </Route>
@@ -180,8 +202,14 @@ function Router() {
       <Route path="/apps/review">
         {() => <ProtectedRoute component={AppReview} />}
       </Route>
+      <Route path="/apps/notices">
+        {() => <ProtectedRoute component={PartnerNotices} />}
+      </Route>
       <Route path="/apps/catalog">
         {() => <ProtectedRoute component={AppCatalog} />}
+      </Route>
+      <Route path="/apps/billing">
+        {() => <ProtectedRoute component={AppBilling} />}
       </Route>
       <Route path="/wallets">
         {() => <ProtectedRoute component={WalletAdmin} />}
