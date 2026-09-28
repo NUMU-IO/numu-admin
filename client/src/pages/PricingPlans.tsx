@@ -226,7 +226,6 @@ export default function PricingPlans() {
                   <Select value={plan.cta} onValueChange={(v) => updatePlan(idx, { cta: v })}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="try_demo">Try Demo</SelectItem>
                       <SelectItem value="subscribe">Subscribe (signup)</SelectItem>
                       <SelectItem value="signup_payg">Pay as you Grow signup</SelectItem>
                       <SelectItem value="contact">Contact Us</SelectItem>
