@@ -16,7 +16,7 @@ export interface PlanConfig {
   price_monthly: number; // EGP, -1 = custom
   price_annual: number;
   currency: string;
-  cta: string; // try_demo, subscribe, contact
+  cta: string; // subscribe, signup_payg, contact (try_demo only in configs saved before 2026-09-25)
   popular: boolean;
   features: PlanFeature[];
 }
