@@ -18,15 +18,7 @@ import { toast } from "sonner";
 
 import DashboardLayout from "@/components/DashboardLayout";
 import { isLiveToken, RevokeTokensDialog } from "@/components/merchants/ApiTokensPanel";
-import {
-  Badge,
-  Button,
-  Card,
-  DataTable,
-  Drawer,
-  EmptyState,
-  type DataTableColumn,
-} from "@/ds";
+import { Badge, Button, Card, DataTable, Drawer, EmptyState, type DataTableColumn } from "@/ds";
 import { formatDateTime, formatNumber, formatRelative } from "@/lib/format";
 import {
   listApiTokenRequests,

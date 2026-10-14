@@ -33,18 +33,12 @@ export function formatNumber(n: number | null | undefined): string {
 }
 
 /** Minor units → `EGP 1,240.00`. Pass the row's own currency where it has one. */
-export function formatMoney(
-  minorUnits: number | null | undefined,
-  currency = "EGP",
-): string {
+export function formatMoney(minorUnits: number | null | undefined, currency = "EGP"): string {
   return money(currency, 2).format((minorUnits ?? 0) / 100);
 }
 
 /** Minor units → `EGP 1,240`. For metric tiles, where the decimals are noise. */
-export function formatMoneyShort(
-  minorUnits: number | null | undefined,
-  currency = "EGP",
-): string {
+export function formatMoneyShort(minorUnits: number | null | undefined, currency = "EGP"): string {
   return money(currency, 0).format((minorUnits ?? 0) / 100);
 }
 

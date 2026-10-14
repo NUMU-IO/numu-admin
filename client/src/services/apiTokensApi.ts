@@ -54,10 +54,7 @@ export function revokeApiToken(tokenId: string, reason: string): Promise<ApiToke
   });
 }
 
-export function revokeAllApiTokens(
-  tenantId: string,
-  reason: string,
-): Promise<{ revoked: number }> {
+export function revokeAllApiTokens(tenantId: string, reason: string): Promise<{ revoked: number }> {
   return apiClient<{ revoked: number }>(`/admin/tenants/${tenantId}/api-tokens/revoke-all`, {
     method: "POST",
     body: JSON.stringify({ reason }),

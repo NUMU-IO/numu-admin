@@ -101,9 +101,7 @@ export async function getMerchants(params: {
   if (params.search) searchParams.set("search", params.search);
   if (params.internal) searchParams.set("internal", params.internal);
 
-  const result = await apiClient<PaginatedResponse<ApiStoreItem>>(
-    `/admin/stores/?${searchParams}`,
-  );
+  const result = await apiClient<PaginatedResponse<ApiStoreItem>>(`/admin/stores/?${searchParams}`);
 
   const pageOffset = (page - 1) * limit;
   const merchants = result.items.map((s, i) => mapStore(s, i, pageOffset));
@@ -154,13 +152,10 @@ export interface ImpersonateResponse {
   refresh_token: string;
 }
 
-export async function impersonateMerchant(
-  merchantId: string,
-): Promise<ImpersonateResponse> {
-  return apiClient<ImpersonateResponse>(
-    `/admin/stores/${merchantId}/impersonate`,
-    { method: "POST" },
-  );
+export async function impersonateMerchant(merchantId: string): Promise<ImpersonateResponse> {
+  return apiClient<ImpersonateResponse>(`/admin/stores/${merchantId}/impersonate`, {
+    method: "POST",
+  });
 }
 
 // ─── InstaPay OCR provider routing (Phase C) ─────────────────────────
@@ -168,11 +163,7 @@ export async function impersonateMerchant(
 /** Permitted values for ``ocr_provider`` on the admin endpoint.
  *  Mirrors the backend's ``_VALID_OCR_PROVIDERS`` set. ``"none"`` is
  *  the wire value for "disable OCR for this store". */
-export type InstapayOcrProvider =
-  | "none"
-  | "google_vision"
-  | "deepseek_hf"
-  | "glm_hf";
+export type InstapayOcrProvider = "none" | "google_vision" | "deepseek_hf" | "glm_hf";
 
 export interface AdminOcrProviderResponse {
   store_id: string;
@@ -214,13 +205,10 @@ export async function setInstapayOcrProvider(
   merchantId: string,
   provider: InstapayOcrProvider,
 ): Promise<AdminOcrProviderResponse> {
-  return apiClient<AdminOcrProviderResponse>(
-    `/admin/stores/${merchantId}/instapay/ocr-provider`,
-    {
-      method: "PUT",
-      body: JSON.stringify({ provider }),
-    },
-  );
+  return apiClient<AdminOcrProviderResponse>(`/admin/stores/${merchantId}/instapay/ocr-provider`, {
+    method: "PUT",
+    body: JSON.stringify({ provider }),
+  });
 }
 
 // ─── Merchant detail (GET /admin/stores/{id}/detail) ────────────────────────
@@ -298,8 +286,6 @@ export interface MerchantDetail {
   }[];
 }
 
-export async function getMerchantDetail(
-  storeId: string,
-): Promise<MerchantDetail> {
+export async function getMerchantDetail(storeId: string): Promise<MerchantDetail> {
   return apiClient<MerchantDetail>(`/admin/stores/${storeId}/detail`);
 }

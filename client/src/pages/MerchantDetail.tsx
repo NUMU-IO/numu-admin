@@ -132,8 +132,7 @@ export default function MerchantDetail() {
 
   const currency = d.store.default_currency ?? "EGP";
   const domain =
-    d.store.custom_domain ??
-    (d.store.subdomain ? `${d.store.subdomain}.numueg.app` : d.store.slug);
+    d.store.custom_domain ?? (d.store.subdomain ? `${d.store.subdomain}.numueg.app` : d.store.slug);
 
   const planItems: KeyValueItem[] = [
     { label: "Plan", value: dash(d.tenant?.plan) },
@@ -186,9 +185,7 @@ export default function MerchantDetail() {
     {
       key: "payment_status",
       header: "Payment",
-      render: (o) => (
-        <StatusBadge status={o.payment_status === "paid" ? "paid" : "pending"} />
-      ),
+      render: (o) => <StatusBadge status={o.payment_status === "paid" ? "paid" : "pending"} />,
     },
     {
       key: "total_cents",
@@ -222,7 +219,11 @@ export default function MerchantDetail() {
               label={d.tenant.lifecycle_state ?? "unknown"}
             />
           ) : null}
-          {d.tenant?.plan ? <Badge tone="neutral" square>{d.tenant.plan}</Badge> : null}
+          {d.tenant?.plan ? (
+            <Badge tone="neutral" square>
+              {d.tenant.plan}
+            </Badge>
+          ) : null}
         </>
       }
       meta={
@@ -254,13 +255,9 @@ export default function MerchantDetail() {
       }
     >
       {d.tenant?.is_demo ? (
-        <Banner
-          tone="warning"
-          icon="flag"
-          title="This is a demo tenant, not a paying merchant"
-        >
-          It is excluded from every platform aggregate and is deleted
-          automatically seven days after it was created.
+        <Banner tone="warning" icon="flag" title="This is a demo tenant, not a paying merchant">
+          It is excluded from every platform aggregate and is deleted automatically seven days after
+          it was created.
         </Banner>
       ) : null}
 
@@ -269,9 +266,7 @@ export default function MerchantDetail() {
           label="Orders"
           value={formatNumber(d.metrics.orders_count)}
           note={
-            d.metrics.last_order_at
-              ? `last ${formatDateTime(d.metrics.last_order_at)}`
-              : "none yet"
+            d.metrics.last_order_at ? `last ${formatDateTime(d.metrics.last_order_at)}` : "none yet"
           }
           icon="cart"
         />

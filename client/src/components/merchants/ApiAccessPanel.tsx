@@ -178,7 +178,9 @@ export function ApiAccessPanel({ tenantId, storeName }: Props) {
           open
           tone="danger"
           icon="alertTriangle"
-          title={confirmOff === "off" ? "Block API access?" : "Return to the plan and turn the API off?"}
+          title={
+            confirmOff === "off" ? "Block API access?" : "Return to the plan and turn the API off?"
+          }
           description={`Every token ${storeName ?? "this merchant"} holds is refused from its next request, and any integration they have built stops working. Webhook deliveries are a separate entitlement and keep running.`}
           onClose={() => setConfirmOff(null)}
           footer={

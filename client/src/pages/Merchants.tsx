@@ -110,10 +110,9 @@ export default function Merchants() {
     mutationFn: ({ id, status }: { id: string; status: string }) =>
       updateMerchantStatus(id, status),
     onSuccess: (_d, v) => {
-      toast.success(
-        v.status === "suspended" ? "Store suspended" : "Store status updated",
-        { description: `${v.id} · recorded in the audit log` },
-      );
+      toast.success(v.status === "suspended" ? "Store suspended" : "Store status updated", {
+        description: `${v.id} · recorded in the audit log`,
+      });
       setSuspending(null);
       invalidate();
     },
@@ -192,7 +191,11 @@ export default function Merchants() {
         <div>
           <div className="ntb__primary ak-cell-line">
             <span>{m.name}</span>
-            {m.isInternal ? <Badge tone="warning" icon="flag" square>Internal</Badge> : null}
+            {m.isInternal ? (
+              <Badge tone="warning" icon="flag" square>
+                Internal
+              </Badge>
+            ) : null}
             {m.founderCohort ? (
               <Badge
                 tone="warning"
@@ -236,15 +239,15 @@ export default function Merchants() {
       header: "Plan",
       render: (m) => (
         <div className="ak-cell-line">
-          <Badge tone="neutral" square>{m.plan}</Badge>
+          <Badge tone="neutral" square>
+            {m.plan}
+          </Badge>
           {/* A trial without its remaining days answers "are they paying?"
               and not "when do I need to call them?", which is the question
               this screen exists for. Under a week reads as a warning. */}
           {m.trialDaysRemaining !== null ? (
             <Badge tone={m.trialDaysRemaining <= 7 ? "warning" : "info"} square>
-              {m.trialDaysRemaining === 0
-                ? "ends today"
-                : `${m.trialDaysRemaining}d left`}
+              {m.trialDaysRemaining === 0 ? "ends today" : `${m.trialDaysRemaining}d left`}
             </Badge>
           ) : null}
         </div>
@@ -319,9 +322,7 @@ export default function Merchants() {
               icon="playCircle"
               label="Reinstate this store"
               size="sm"
-              onClick={() =>
-                statusMutation.mutate({ id: m.merchantId, status: "active" })
-              }
+              onClick={() => statusMutation.mutate({ id: m.merchantId, status: "active" })}
             />
           ) : (
             <IconButton
@@ -403,12 +404,7 @@ export default function Merchants() {
           }}
           searchPlaceholder="Name, email or subdomain"
           actions={
-            <Button
-              variant="subtle"
-              size="sm"
-              icon="download"
-              onClick={() => exportCsv(merchants)}
-            >
+            <Button variant="subtle" size="sm" icon="download" onClick={() => exportCsv(merchants)}>
               Export CSV
             </Button>
           }
@@ -482,8 +478,7 @@ export default function Merchants() {
         confirmLabel="Suspend store"
         onClose={() => setSuspending(null)}
         onConfirm={() =>
-          suspending &&
-          statusMutation.mutate({ id: suspending.merchantId, status: "suspended" })
+          suspending && statusMutation.mutate({ id: suspending.merchantId, status: "suspended" })
         }
       />
 
@@ -503,9 +498,7 @@ export default function Merchants() {
         ]}
         confirmLabel="Start session"
         onClose={() => setImpersonating(null)}
-        onConfirm={() =>
-          impersonating && impersonateMutation.mutate(impersonating.merchantId)
-        }
+        onConfirm={() => impersonating && impersonateMutation.mutate(impersonating.merchantId)}
       />
 
       <Dialog
@@ -530,8 +523,7 @@ export default function Merchants() {
               loading={ocrMutation.isPending}
               disabled={requiresPrivacyAck && !ocrPrivacyAck}
               onClick={() =>
-                ocrTarget &&
-                ocrMutation.mutate({ id: ocrTarget.merchantId, provider: ocrProvider })
+                ocrTarget && ocrMutation.mutate({ id: ocrTarget.merchantId, provider: ocrProvider })
               }
             >
               Save provider
@@ -650,7 +642,18 @@ function exportCsv(rows: Merchant[]) {
   }
   // trial_ends_at rides along so a call list can be sorted by it in a sheet,
   // which is what the export is for.
-  const header = ["store_id", "name", "email", "domain", "status", "plan", "trial_ends_at", "revenue_piasters", "orders", "created_at"];
+  const header = [
+    "store_id",
+    "name",
+    "email",
+    "domain",
+    "status",
+    "plan",
+    "trial_ends_at",
+    "revenue_piasters",
+    "orders",
+    "created_at",
+  ];
   const body = rows.map((m) =>
     [
       m.merchantId,

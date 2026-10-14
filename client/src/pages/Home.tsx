@@ -121,7 +121,9 @@ export default function Home() {
       render: (o) => (
         <div>
           <div>{o.customer_name || "Guest"}</div>
-          <div className="ntb__sub numu-phone" dir="ltr">{maskPhone(o.customer_phone)}</div>
+          <div className="ntb__sub numu-phone" dir="ltr">
+            {maskPhone(o.customer_phone)}
+          </div>
         </div>
       ),
     },
@@ -165,9 +167,7 @@ export default function Home() {
           <EmptyState
             kind="error"
             title="The overview failed to load"
-            body={
-              error instanceof Error ? error.message : "The request did not complete."
-            }
+            body={error instanceof Error ? error.message : "The request did not complete."}
             action={
               <Button size="sm" icon="refresh" onClick={() => refetch()}>
                 Try again
@@ -188,12 +188,7 @@ export default function Home() {
           : "Loading platform counts."
       }
       actions={
-        <Button
-          variant="subtle"
-          icon="refresh"
-          loading={isLoading}
-          onClick={() => refetch()}
-        >
+        <Button variant="subtle" icon="refresh" loading={isLoading} onClick={() => refetch()}>
           Refresh
         </Button>
       }
@@ -203,24 +198,24 @@ export default function Home() {
       {data?.health
         .filter((h) => h.severity !== "ok")
         .map((h) => (
-        <Banner
-          key={h.id}
-          tone={h.severity === "danger" ? "danger" : "warning"}
-          title={h.title}
-          actions={
-            <Button
-              size="sm"
-              variant="subtle"
-              icon="activity"
-              onClick={() => navigate("/orders")}
-            >
-              Investigate
-            </Button>
-          }
-        >
-          {h.detail}
-        </Banner>
-      ))}
+          <Banner
+            key={h.id}
+            tone={h.severity === "danger" ? "danger" : "warning"}
+            title={h.title}
+            actions={
+              <Button
+                size="sm"
+                variant="subtle"
+                icon="activity"
+                onClick={() => navigate("/orders")}
+              >
+                Investigate
+              </Button>
+            }
+          >
+            {h.detail}
+          </Banner>
+        ))}
 
       {/* Strip one — how the platform is doing. */}
       <div className="ak-metrics">
@@ -323,9 +318,7 @@ export default function Home() {
         />
         <MetricCard
           label="Open support cases"
-          value={
-            m?.open_support_cases ? formatNumber(m.open_support_cases.value) : "—"
-          }
+          value={m?.open_support_cases ? formatNumber(m.open_support_cases.value) : "—"}
           note={m?.open_support_cases?.note ?? undefined}
           icon="inbox"
           alert={Boolean(m?.open_support_cases?.value)}
@@ -425,9 +418,9 @@ export default function Home() {
                 <span className="numu-mono">{formatMoney(e?.wallet_float_cents ?? 0)}</span>
               </div>
               <p className="ak-feed__meta">
-                Top-ups are merchant cash on the platform, not income. They become
-                revenue only as commission is taken against them, which is why
-                neither line is added to recognised revenue.
+                Top-ups are merchant cash on the platform, not income. They become revenue only as
+                commission is taken against them, which is why neither line is added to recognised
+                revenue.
               </p>
             </div>
           </div>
@@ -468,10 +461,7 @@ export default function Home() {
               gridLines={2}
               color="var(--viz-2)"
               isHighlighted={(d) =>
-                Boolean(
-                  data?.webhook_failures_per_hour.find((b) => b.label === d.label)
-                    ?.highlight,
-                )
+                Boolean(data?.webhook_failures_per_hour.find((b) => b.label === d.label)?.highlight)
               }
               label={`Failed webhook deliveries per hour. ${formatNumber(
                 m?.failed_jobs_webhooks.value,
@@ -596,9 +586,7 @@ export default function Home() {
                               : "Normal"
                         }
                       />
-                      <span className="numu-label">
-                        {HEALTH_LABEL[h.id] ?? sentenceCase(h.id)}
-                      </span>
+                      <span className="numu-label">{HEALTH_LABEL[h.id] ?? sentenceCase(h.id)}</span>
                     </div>
                     <p className="ak-feed__title">{h.title}</p>
                     <p className="ak-feed__meta">{h.detail}</p>
