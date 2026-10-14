@@ -289,3 +289,120 @@ export interface MerchantDetail {
 export async function getMerchantDetail(storeId: string): Promise<MerchantDetail> {
   return apiClient<MerchantDetail>(`/admin/stores/${storeId}/detail`);
 }
+
+// ─── Merchant ops (/admin/merchants) ─────────────────────────────────────────
+
+export interface MerchantInsights {
+  tenant_id: string;
+  billing: {
+    paused: boolean;
+    lifecycle_state: string;
+    expires_at: string | null;
+    read_only_at: string | null;
+    delete_at: string | null;
+    next_renewal_at: string | null;
+    trial_converted_at: string | null;
+  };
+  /** One row per store, last 90 days. Rates are percentages. */
+  health: {
+    store_id: string;
+    store_name: string;
+    score: number | null;
+    grade: string;
+    delivery_success_rate: number;
+    cod_success_rate: number;
+    cod_rejection_rate: number;
+    return_rate: number;
+    cod_orders: number;
+    orders_analyzed: number;
+    insufficient_data: boolean;
+    window_days: number;
+  }[];
+  api_usage: {
+    requests_30d: number;
+    throttled_30d: number;
+    errors_5xx_30d: number;
+    requests_today: number;
+    /** null = unlimited. */
+    limits: {
+      allowed: boolean;
+      per_minute: number | null;
+      per_second: number | null;
+      monthly_quota: number | null;
+      key_limit: number | null;
+    };
+  };
+  whatsapp: { store_id: string; store_name: string; messages_this_month: number }[];
+  invoices: {
+    id: string;
+    period_start: string | null;
+    period_end: string | null;
+    amount_cents: number;
+    currency: string;
+    status: string;
+    paid_at: string | null;
+    created_at: string | null;
+  }[];
+  support_cases: {
+    open: number;
+    recent: {
+      id: string;
+      subject: string;
+      status: string;
+      priority: string;
+      store_name: string | null;
+      assignee_email: string | null;
+      created_at: string;
+    }[];
+  };
+  timeline: {
+    id: string;
+    event_type: string;
+    action: string | null;
+    resource_type: string | null;
+    resource_id: string | null;
+    details: Record<string, unknown> | null;
+    actor_email: string | null;
+    created_at: string | null;
+  }[];
+}
+
+export interface AttentionRow {
+  tenant_id: string;
+  store_id: string | null;
+  name: string | null;
+  reasons: { kind: "return_spike" | "stuck_orders" | "wallet" | "trial_ending"; detail: string }[];
+}
+
+export function getMerchantInsights(tenantId: string): Promise<MerchantInsights> {
+  return apiClient(`/admin/merchants/${tenantId}/insights`);
+}
+
+export function getMerchantsAttention(): Promise<AttentionRow[]> {
+  return apiClient("/admin/merchants/attention");
+}
+
+export function extendTrial(tenantId: string, days: number, reason: string): Promise<unknown> {
+  return apiClient(`/admin/merchants/${tenantId}/extend-trial`, {
+    method: "POST",
+    body: JSON.stringify({ days, reason }),
+  });
+}
+
+export function pauseBilling(tenantId: string, paused: boolean, reason: string): Promise<unknown> {
+  return apiClient(`/admin/merchants/${tenantId}/pause-billing`, {
+    method: "POST",
+    body: JSON.stringify({ paused, reason }),
+  });
+}
+
+export function refundInvoice(
+  tenantId: string,
+  invoiceId: string,
+  reason: string,
+): Promise<unknown> {
+  return apiClient(`/admin/merchants/${tenantId}/invoices/${invoiceId}/refund`, {
+    method: "POST",
+    body: JSON.stringify({ reason }),
+  });
+}
