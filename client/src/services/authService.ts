@@ -19,6 +19,8 @@ export interface AdminUser {
   is_verified: boolean;
   created_at: string;
   updated_at: string;
+  /** Staff role: null or "all" is a full admin; else "support" | "finance" | "ops". */
+  admin_scope: string | null;
 }
 
 interface AuthResponse {
@@ -34,6 +36,7 @@ interface AuthResponse {
     is_verified?: boolean;
     created_at: string;
     updated_at: string;
+    admin_scope?: string | null;
   };
 }
 
@@ -50,6 +53,7 @@ function mapUser(raw: AuthResponse["user"]): AdminUser {
     is_verified: raw.is_verified ?? false,
     created_at: raw.created_at,
     updated_at: raw.updated_at,
+    admin_scope: raw.admin_scope ?? null,
   };
 }
 
@@ -59,10 +63,7 @@ function mapUser(raw: AuthResponse["user"]): AdminUser {
 // "Log in as merchant" impersonation flow would overwrite the admin's
 // session on .numueg.app and the admin panel would show the merchant's
 // email on the next API call.
-export async function login(
-  email: string,
-  password: string,
-): Promise<AdminUser> {
+export async function login(email: string, password: string): Promise<AdminUser> {
   // Use raw fetch (not apiClient) because this runs before CSRF token exists
   const res = await fetch(`${getApiBase()}/admin/auth/login`, {
     method: "POST",
@@ -91,7 +92,8 @@ export async function login(
   }
 
   await initCSRF();
-  return user;
+  // The login response carries no staff scope; /me does.
+  return getMe();
 }
 
 export async function logout(): Promise<void> {

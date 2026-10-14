@@ -9,7 +9,7 @@
 
 import { useAuth } from "@/_core/hooks/useAuth";
 import { IconButton, SidebarNav, type NavSection } from "@/ds";
-import { ADMIN_NAV, navIdForPath, navItemById } from "@/lib/adminNav";
+import { navForScope, navIdForPath, navItemById } from "@/lib/adminNav";
 import { getCurrentEnv } from "@/lib/env";
 import { getQueueCounts } from "@/services/dashboardService";
 import { useQuery } from "@tanstack/react-query";
@@ -49,7 +49,7 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
     refetchInterval: 60_000,
   });
 
-  const sections: NavSection[] = ADMIN_NAV.map((section) => ({
+  const sections: NavSection[] = navForScope(user?.admin_scope).map((section) => ({
     label: section.label,
     items: section.items.map((item) => {
       const count = item.queueKey ? queues?.[item.queueKey] : undefined;

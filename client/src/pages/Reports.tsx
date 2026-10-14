@@ -34,20 +34,26 @@ function thirtyDaysAgo() {
   return isoDate(d);
 }
 
-function toCSV(rows: Record<string, unknown>[]): string {
+/**
+ * One CSV cell. Text a spreadsheet would run as a formula (=, +, -, @, tab,
+ * CR) gets a leading apostrophe; numbers are left alone so -5 stays a number.
+ */
+export function csvCell(v: unknown): string {
+  const raw = String(v ?? "");
+  const s = typeof v !== "number" && /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
+  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+export function toCSV(rows: Record<string, unknown>[]): string {
   if (!rows.length) return "";
   const headers = Object.keys(rows[0]);
-  const escape = (v: unknown) => {
-    const s = String(v ?? "");
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-  };
   return [
     headers.join(","),
-    ...rows.map((row) => headers.map((h) => escape(row[h])).join(",")),
+    ...rows.map((row) => headers.map((h) => csvCell(row[h])).join(",")),
   ].join("\n");
 }
 
-function downloadCSV(csv: string, filename: string) {
+export function downloadCSV(csv: string, filename: string) {
   const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
   const a = document.createElement("a");
   a.href = url;
@@ -197,13 +203,10 @@ export default function Reports() {
   }
 
   return (
-    <DashboardLayout
-      title="Reports"
-      subtitle="CSV exports, generated in your browser."
-    >
+    <DashboardLayout title="Reports" subtitle="CSV exports, generated in your browser.">
       <Banner tone="info" icon="info" title="The dates name the file, they do not filter it">
-        Every export returns the most recent records the API will serve. Filter
-        in the spreadsheet, or use the export button on a filtered list page.
+        Every export returns the most recent records the API will serve. Filter in the spreadsheet,
+        or use the export button on a filtered list page.
       </Banner>
 
       <Card title="Report period" subtitle="Filename only">
@@ -256,10 +259,9 @@ export default function Reports() {
 
       <Card title="About these exports" subtitle="Handling">
         <p style={{ fontSize: "var(--fs-app-sm)", maxWidth: "var(--measure)" }}>
-          Files are built in this browser tab from the admin API and saved
-          straight to your device — nothing is sent to a third party. They
-          contain merchant and customer personal data, so treat a downloaded
-          file the way you would treat the database it came from.
+          Files are built in this browser tab from the admin API and saved straight to your device —
+          nothing is sent to a third party. They contain merchant and customer personal data, so
+          treat a downloaded file the way you would treat the database it came from.
         </p>
       </Card>
     </DashboardLayout>

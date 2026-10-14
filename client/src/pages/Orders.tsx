@@ -10,6 +10,7 @@
 
 import DashboardLayout from "@/components/DashboardLayout";
 import {
+  AuditTimeline,
   Button,
   Card,
   ConfirmDialog,
@@ -27,14 +28,22 @@ import {
   RiskScore,
   Select,
   StatusBadge,
+  Textarea,
   type DataTableColumn,
 } from "@/ds";
 import { formatDateTime, formatMoney, formatNumber, sentenceCase } from "@/lib/format";
+import { runLimited } from "@/lib/utils";
+import { downloadCSV, toCSV } from "@/pages/Reports";
 import {
+  addOrderNote,
+  confirmOrderDeposit,
   deleteOrder,
   getOrder,
+  getOrderActivities,
   getOrderStats,
   getOrders,
+  markOrderPaid,
+  resendOrderWhatsApp,
   updateOrderStatus,
   type Order,
 } from "@/services/orderService";
@@ -129,7 +138,8 @@ export default function Orders() {
   const [view, setView] = useState("all");
   const [page, setPage] = useState(1);
 
-  const [editing, setEditing] = useState<Order | null>(null);
+  const [editing, setEditing] = useState<Order[] | null>(null);
+  const [selected, setSelected] = useState<Array<string | number>>([]);
   const [nextStatus, setNextStatus] = useState("pending");
   const [deleting, setDeleting] = useState<Order | null>(null);
   const [opened, setOpened] = useState<string | null>(null);
@@ -156,12 +166,23 @@ export default function Orders() {
   };
 
   const statusMutation = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: string }) => updateOrderStatus(id, status),
-    onSuccess: (_d, v) => {
-      toast.success("Order status updated", {
-        description: `${v.id.slice(0, 8)} · now ${v.status} · recorded in the audit log`,
-      });
+    // ponytail: one PATCH per order from the browser; a bulk endpoint when
+    // admins start selecting more than a page (>100) at a time.
+    mutationFn: async ({ ids, status }: { ids: string[]; status: string }) => {
+      const results = await runLimited(ids, 4, (id) => updateOrderStatus(id, status));
+      const failed = results.filter((r): r is PromiseRejectedResult => r.status === "rejected");
+      if (failed.length === ids.length) throw failed[0].reason;
+      return failed.length;
+    },
+    onSuccess: (failed, v) => {
+      toast[failed ? "warning" : "success"](
+        v.ids.length === 1
+          ? "Order status updated"
+          : `${v.ids.length - failed} updated, ${failed} failed`,
+        { description: `Now ${v.status} · recorded in the audit log` },
+      );
       setEditing(null);
+      setSelected([]);
       invalidate();
     },
     onError: (e) => toast.error((e as Error).message || "Status change failed"),
@@ -244,7 +265,7 @@ export default function Orders() {
             label="Change this order's status"
             size="sm"
             onClick={() => {
-              setEditing(o);
+              setEditing([o]);
               setNextStatus(o.status);
             }}
           />
@@ -261,6 +282,26 @@ export default function Orders() {
 
   const orders = data?.orders ?? [];
   const filtered = Boolean(search) || view !== "all";
+  const picked = orders.filter((o) => selected.includes(o.orderId));
+
+  const exportPicked = () =>
+    downloadCSV(
+      toCSV(
+        picked.map((o) => ({
+          order: o.orderNumber,
+          store: o.storeName ?? "",
+          customer: o.customerName ?? "",
+          phone: o.customerPhone ?? "",
+          status: o.status,
+          payment_status: o.paymentStatus,
+          payment_method: o.paymentMethod ?? "",
+          currency: o.currency ?? "EGP",
+          total: (o.total / 100).toFixed(2),
+          placed: o.createdAt.toISOString(),
+        })),
+      ),
+      `numu_orders_${new Date().toISOString().split("T")[0]}.csv`,
+    );
 
   return (
     <DashboardLayout
@@ -332,11 +373,36 @@ export default function Orders() {
               Refresh
             </Button>
           }
+          selectedCount={picked.length}
+          onClearSelection={() => setSelected([])}
+          bulkActions={
+            <>
+              <Button
+                size="sm"
+                variant="subtle"
+                onClick={() => {
+                  setEditing(picked);
+                  setNextStatus(picked[0]?.status ?? "pending");
+                }}
+              >
+                Change status
+              </Button>
+              <Button size="sm" variant="subtle" onClick={exportPicked}>
+                Export CSV
+              </Button>
+            </>
+          }
         />
         <DataTable
           columns={columns}
           rows={orders}
           rowKey={(o) => o.orderId}
+          selectable
+          selected={picked.map((o) => o.orderId)}
+          onSelect={(key) =>
+            setSelected((s) => (s.includes(key) ? s.filter((k) => k !== key) : [...s, key]))
+          }
+          onSelectAll={(checked) => setSelected(checked ? orders.map((o) => o.orderId) : [])}
           loading={isLoading}
           caption="Orders across all merchants"
           onRowClick={(o) => setOpened(o.orderId)}
@@ -379,9 +445,11 @@ export default function Orders() {
         open={Boolean(editing)}
         title="Change order status"
         description={
-          editing
-            ? `${editing.orderNumber} · ${formatMoney(editing.total, editing.currency ?? "EGP")} · currently ${statusOf(ORDER_STATUS, editing.status).label}.`
-            : undefined
+          editing?.length === 1
+            ? `${editing[0].orderNumber} · ${formatMoney(editing[0].total, editing[0].currency ?? "EGP")} · currently ${statusOf(ORDER_STATUS, editing[0].status).label}.`
+            : editing
+              ? `${editing.length} selected orders. Each one is checked against its own allowed transitions.`
+              : undefined
         }
         onClose={() => setEditing(null)}
         footer={
@@ -394,7 +462,7 @@ export default function Orders() {
               onClick={() =>
                 editing &&
                 statusMutation.mutate({
-                  id: editing.orderId,
+                  ids: editing.map((o) => o.orderId),
                   status: nextStatus,
                 })
               }
@@ -406,7 +474,7 @@ export default function Orders() {
       >
         <FormField
           label="New status"
-          hint="The merchant sees the change immediately. This is recorded in the audit log against your account."
+          hint="The merchant sees the change immediately. Cancelled and returned put the stock back. This is recorded in the audit log against your account."
         >
           <Select
             value={nextStatus}
@@ -463,11 +531,30 @@ function OrderDrawer({
   onOpenOrder: (id: string) => void;
   onOpenMerchant: (storeId: string) => void;
 }) {
+  const queryClient = useQueryClient();
   const q = useQuery({
     queryKey: ["orders", "detail", orderId],
     queryFn: () => getOrder(orderId),
   });
+  const activities = useQuery({
+    queryKey: ["orders", "activities", orderId],
+    queryFn: () => getOrderActivities(orderId),
+  });
+  const [note, setNote] = useState("");
+  const [cancelling, setCancelling] = useState(false);
+  const [markingPaid, setMarkingPaid] = useState(false);
+  const act = useMutation({
+    mutationFn: (run: () => Promise<string>) => run(),
+    onSuccess: (message) => {
+      toast.success(message, { description: "Recorded in the audit log" });
+      setCancelling(false);
+      setMarkingPaid(false);
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+    },
+    onError: (e) => toast.error((e as Error).message || "Action failed"),
+  });
   const o = q.data;
+  const closed = ["cancelled", "returned", "refunded"].includes(o?.status ?? "");
   const money = (n: number | null | undefined) => formatMoney(n, o?.currency ?? "EGP");
   const address = o
     ? [
@@ -518,6 +605,63 @@ function OrderDrawer({
             <OrderStatusBadge status={o.status} />
             <PaymentBadge status={o.payment_status} />
             {o.risk_score != null ? <RiskScore score={o.risk_score} inline /> : null}
+          </div>
+
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {!["paid", "partially_refunded", "refunded"].includes(o.payment_status) && !closed ? (
+              <Button
+                size="sm"
+                variant="subtle"
+                icon="check"
+                disabled={act.isPending}
+                onClick={() => setMarkingPaid(true)}
+              >
+                Mark paid
+              </Button>
+            ) : null}
+            {o.status === "pending_deposit" ? (
+              <Button
+                size="sm"
+                variant="subtle"
+                icon="check"
+                disabled={act.isPending}
+                onClick={() =>
+                  act.mutate(() => confirmOrderDeposit(o.id).then(() => "Deposit confirmed"))
+                }
+              >
+                Confirm deposit
+              </Button>
+            ) : null}
+            {["pending_deposit", "awaiting_payment", "pending", "confirmed", "processing"].includes(
+              o.status,
+            ) ? (
+              <Button
+                size="sm"
+                variant="subtle"
+                icon="x"
+                disabled={act.isPending}
+                onClick={() => setCancelling(true)}
+              >
+                Cancel & restock
+              </Button>
+            ) : null}
+            <Button
+              size="sm"
+              variant="subtle"
+              icon="refresh"
+              disabled={act.isPending}
+              onClick={() =>
+                act.mutate(() =>
+                  resendOrderWhatsApp(o.id).then((r) =>
+                    r.sent
+                      ? "WhatsApp confirmation resent"
+                      : "No new send — check the store's WhatsApp status",
+                  ),
+                )
+              }
+            >
+              Resend WhatsApp
+            </Button>
           </div>
 
           <KeyValue
@@ -706,8 +850,85 @@ function OrderDrawer({
               />
             </Card>
           ) : null}
+
+          <Card title="Notes">
+            <div style={{ display: "grid", gap: 8 }}>
+              <Textarea
+                value={note}
+                maxLength={2000}
+                rows={3}
+                placeholder="Internal note — the merchant's staff can read it on the order"
+                onChange={(e) => setNote(e.target.value)}
+              />
+              <div>
+                <Button
+                  size="sm"
+                  disabled={!note.trim() || act.isPending}
+                  onClick={() =>
+                    act.mutate(() =>
+                      addOrderNote(o.id, note.trim()).then(() => {
+                        setNote("");
+                        return "Note added";
+                      }),
+                    )
+                  }
+                >
+                  Add note
+                </Button>
+              </div>
+              {activities.data?.length ? (
+                <AuditTimeline
+                  entries={activities.data.map((a) => ({
+                    id: a.id,
+                    action: a.body || sentenceCase(a.event_type ?? "event"),
+                    actor: a.user_name ?? undefined,
+                    actorType: a.kind === "comment" ? "staff" : "system",
+                    timestamp: formatDateTime(a.created_at),
+                  }))}
+                />
+              ) : null}
+            </div>
+          </Card>
         </div>
       )}
+      <ConfirmDialog
+        open={cancelling}
+        tone="warning"
+        title="Cancel this order?"
+        entity={[
+          { label: "Order", value: o?.order_number ?? "", mono: true },
+          { label: "Value", value: o ? money(o.total) : "", mono: true },
+        ]}
+        consequences={[
+          "The order moves to Cancelled and the merchant sees it immediately.",
+          "Stock it took at checkout goes back to the products, once.",
+          "Any payment already captured is not refunded by this action.",
+        ]}
+        confirmLabel="Cancel & restock"
+        onClose={() => setCancelling(false)}
+        onConfirm={() =>
+          o && act.mutate(() => updateOrderStatus(o.id, "cancelled").then(() => "Order cancelled"))
+        }
+      />
+      <ConfirmDialog
+        open={markingPaid}
+        tone="warning"
+        title="Mark this order paid?"
+        entity={[
+          { label: "Order", value: o?.order_number ?? "", mono: true },
+          { label: "Value", value: o ? money(o.total) : "", mono: true },
+        ]}
+        consequences={[
+          "Records the full value as collected outside a payment gateway.",
+          "Issues the invoice, books NUMU's commission and emails the customer.",
+          "Only do this once the money has actually reached the merchant.",
+        ]}
+        confirmLabel="Mark paid"
+        onClose={() => setMarkingPaid(false)}
+        onConfirm={() =>
+          o && act.mutate(() => markOrderPaid(o.id).then(() => "Order marked as paid"))
+        }
+      />
     </Drawer>
   );
 }

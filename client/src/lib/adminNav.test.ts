@@ -12,7 +12,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { ADMIN_NAV, navIdForPath, navTrailForPath } from "./adminNav";
+import { ADMIN_NAV, navForScope, navIdForPath, navTrailForPath } from "./adminNav";
 import {
   formatCompact,
   formatMoney,
@@ -70,6 +70,31 @@ describe("nav model", () => {
     const items = ADMIN_NAV.flatMap((s) => s.items);
     expect(new Set(items.map((i) => i.id)).size).toBe(items.length);
     for (const item of items) expect(item.href.startsWith("/")).toBe(true);
+  });
+});
+
+describe("navForScope", () => {
+  const ids = (scope: string | null) => navForScope(scope).flatMap((s) => s.items.map((i) => i.id));
+
+  it("gives a full admin everything", () => {
+    expect(navForScope(null)).toBe(ADMIN_NAV);
+    expect(navForScope("all")).toBe(ADMIN_NAV);
+  });
+
+  it("hides what a limited scope cannot open", () => {
+    expect(ids("support")).toContain("orders");
+    expect(ids("support")).not.toContain("wallets");
+    expect(ids("support")).not.toContain("settings");
+    expect(ids("finance")).toContain("wallets");
+    expect(ids("ops")).toContain("merchants");
+    expect(ids("finance")).toContain("merchants");
+    expect(ids("support")).not.toContain("merchants");
+    for (const scope of ["support", "finance", "ops"]) expect(ids(scope)).toContain("audit");
+  });
+
+  it("shows an unknown scope nothing but drops empty sections", () => {
+    expect(ids("bogus")).toEqual([]);
+    expect(navForScope("support").every((s) => s.items.length > 0)).toBe(true);
   });
 });
 

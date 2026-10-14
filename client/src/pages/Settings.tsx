@@ -9,7 +9,7 @@
 
 import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
-import { Banner } from "@/ds";
+import { Banner, Select } from "@/ds";
 import { DashboardLayoutSkeleton } from "@/components/DashboardLayoutSkeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -32,6 +32,9 @@ import {
   listAdmins,
   inviteAdmin,
   revokeAdmin,
+  updateAdminScope,
+  ADMIN_SCOPE_OPTIONS,
+  type AdminScope,
   type AdminUserItem,
 } from "@/services/adminUsersApi";
 import {
@@ -87,6 +90,7 @@ export default function Settings() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteFirstName, setInviteFirstName] = useState("");
   const [inviteLastName, setInviteLastName] = useState("");
+  const [inviteScope, setInviteScope] = useState<AdminScope>("all");
   const [tempPassword, setTempPassword] = useState<string | null>(null);
 
   const adminsQuery = useQuery({
@@ -101,6 +105,7 @@ export default function Settings() {
         email: inviteEmail.trim(),
         first_name: inviteFirstName.trim(),
         last_name: inviteLastName.trim(),
+        admin_scope: inviteScope,
       }),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["admin-users"] });
@@ -131,10 +136,20 @@ export default function Settings() {
     onError: (err) => toast.error((err as Error).message || "Revoke failed"),
   });
 
+  const scopeMutation = useMutation({
+    mutationFn: ({ id, scope }: { id: string; scope: AdminScope }) => updateAdminScope(id, scope),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+      toast.success("Admin scope updated");
+    },
+    onError: (err) => toast.error((err as Error).message || "Scope change failed"),
+  });
+
   const resetInvite = () => {
     setInviteEmail("");
     setInviteFirstName("");
     setInviteLastName("");
+    setInviteScope("all");
     setTempPassword(null);
   };
 
@@ -824,6 +839,17 @@ export default function Settings() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
+                          {isMe ? null : (
+                            <Select
+                              aria-label={`Scope for ${a.email}`}
+                              value={a.admin_scope ?? "all"}
+                              options={ADMIN_SCOPE_OPTIONS}
+                              disabled={scopeMutation.isPending}
+                              onChange={(e) =>
+                                scopeMutation.mutate({ id: a.id, scope: e.target.value as AdminScope })
+                              }
+                            />
+                          )}
                           <Badge
                             className={`${
                               a.status === "active"
@@ -912,6 +938,15 @@ export default function Settings() {
                     value={inviteEmail}
                     onChange={(e) => setInviteEmail(e.target.value)}
                     placeholder="name@company.com"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="invite-scope">Access</Label>
+                  <Select
+                    id="invite-scope"
+                    value={inviteScope}
+                    options={ADMIN_SCOPE_OPTIONS}
+                    onChange={(e) => setInviteScope(e.target.value as AdminScope)}
                   />
                 </div>
 

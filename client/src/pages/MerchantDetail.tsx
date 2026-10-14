@@ -12,6 +12,11 @@
  *
  * The Controls card carries the three levers staff reach for most — suspend,
  * change plan, mark internal — each behind a confirmation.
+ *
+ * A second call (`/admin/merchants/{tenant}/insights`) feeds the rest: store
+ * health, API and WhatsApp usage, invoices, support cases and the staff
+ * timeline. Billing controls (extend trial, pause billing, credit, refund)
+ * sit on the Billing tab, each confirmed with a reason for the audit log.
  */
 
 import DashboardLayout from "@/components/DashboardLayout";
@@ -21,6 +26,7 @@ import { ApiTokensPanel } from "@/components/merchants/ApiTokensPanel";
 import { EntitlementsPanel } from "@/components/merchants/EntitlementsPanel";
 import { WhatsAppTransportPanel } from "@/components/merchants/WhatsAppTransportPanel";
 import {
+  AuditTimeline,
   Badge,
   Banner,
   Button,
@@ -28,23 +34,44 @@ import {
   ConfirmDialog,
   DataTable,
   EmptyState,
+  FormField,
+  Input,
   KeyValue,
   MetricCard,
   NUMU_STATUS,
   Select,
   StatusBadge,
+  Tabs,
+  Textarea,
   type DataTableColumn,
   type KeyValueItem,
 } from "@/ds";
-import { formatDateTime, formatMoney, formatMoneyShort, formatNumber } from "@/lib/format";
 import {
+  formatDateTime,
+  formatMoney,
+  formatMoneyShort,
+  formatNumber,
+  humanizeAction,
+  parseMoney,
+} from "@/lib/format";
+import {
+  extendTrial,
   getMerchantDetail,
+  getMerchantInsights,
+  pauseBilling,
+  refundInvoice,
   toggleMerchantInternal,
   updateMerchantStatus,
   updateTenant,
   type MerchantDetail as MerchantDetailData,
+  type MerchantInsights,
 } from "@/services/merchantService";
 import { FEATURES_QUERY_KEY, listFeatures } from "@/services/entitlementsAdminApi";
+import {
+  adjustWallet,
+  getWalletDetail,
+  type AdminWalletLedgerEntry,
+} from "@/services/walletAdminApi";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -90,6 +117,18 @@ export default function MerchantDetail() {
     queryFn: () => getMerchantDetail(storeId),
     enabled: Boolean(storeId),
   });
+  const tenantId = detail.data?.tenant?.id;
+  const insights = useQuery({
+    queryKey: ["merchant-insights", tenantId],
+    queryFn: () => getMerchantInsights(tenantId!),
+    enabled: Boolean(tenantId),
+  });
+  const ledger = useQuery({
+    queryKey: ["admin-wallets", tenantId],
+    queryFn: () => getWalletDetail(tenantId!),
+    enabled: Boolean(tenantId && detail.data?.wallet),
+  });
+  const [tab, setTab] = useState("overview");
 
   if (detail.isLoading) return <DashboardLayoutSkeleton />;
 
@@ -202,6 +241,26 @@ export default function MerchantDetail() {
     },
   ];
 
+  const ledgerColumns: DataTableColumn<AdminWalletLedgerEntry>[] = [
+    { key: "kind", header: "Entry", render: (t) => humanizeAction(t.kind) },
+    {
+      key: "amount_cents",
+      header: "Amount",
+      align: "end",
+      mono: true,
+      render: (t) => formatMoney(t.amount_cents, d.wallet?.currency),
+    },
+    {
+      key: "balance_after_cents",
+      header: "Balance after",
+      align: "end",
+      mono: true,
+      render: (t) => formatMoney(t.balance_after_cents, d.wallet?.currency),
+    },
+    { key: "note", header: "Note", render: (t) => t.note ?? "—" },
+    { key: "created_at", header: "When", mono: true, render: (t) => formatDateTime(t.created_at) },
+  ];
+
   return (
     <DashboardLayout
       title={d.store.name}
@@ -234,6 +293,18 @@ export default function MerchantDetail() {
           {d.store.default_currency ? <span>{d.store.default_currency}</span> : null}
         </>
       }
+      tabs={
+        <Tabs
+          tabs={[
+            { id: "overview", label: "Overview" },
+            { id: "billing", label: "Billing" },
+            { id: "integrations", label: "API & integrations" },
+            { id: "activity", label: "Activity" },
+          ]}
+          active={tab}
+          onChange={setTab}
+        />
+      }
       actions={
         <>
           <Button variant="subtle" icon="arrowLeft" onClick={() => navigate("/merchants")}>
@@ -261,128 +332,193 @@ export default function MerchantDetail() {
         </Banner>
       ) : null}
 
-      <div className="ak-metrics ak-metrics--4">
-        <MetricCard
-          label="Orders"
-          value={formatNumber(d.metrics.orders_count)}
-          note={
-            d.metrics.last_order_at ? `last ${formatDateTime(d.metrics.last_order_at)}` : "none yet"
-          }
-          icon="cart"
-        />
-        <MetricCard
-          label="Paid revenue"
-          value={formatMoneyShort(d.metrics.paid_revenue_cents, currency)}
-          icon="banknote"
-        />
-        <MetricCard
-          label="Products"
-          value={formatNumber(d.metrics.products_count)}
-          icon="package"
-        />
-        <MetricCard
-          label="Customers"
-          value={formatNumber(d.metrics.customers_count)}
-          icon="users"
-        />
-      </div>
-
-      <ControlsCard d={d} storeId={storeId} />
-
-      {d.tenant?.is_demo ? (
-        <Card title="Demo lead" subtitle="Captured on the landing form">
-          <KeyValue
-            items={[
-              { label: "Name", value: dash(d.tenant.demo_name) },
-              { label: "Email", value: dash(d.tenant.demo_email), mono: true },
-              { label: "WhatsApp", value: dash(d.tenant.demo_whatsapp), mono: true },
-              {
-                label: "Started",
-                value: formatDateTime(d.tenant.demo_started_at),
-                mono: true,
-              },
-            ]}
-          />
-        </Card>
-      ) : null}
-
-      <div className="ak-2col">
-        <Card title="Plan and lifecycle" subtitle="Tenant">
-          <KeyValue items={planItems} />
-        </Card>
-        <Card title="Owner account" subtitle="User">
-          <KeyValue items={ownerItems} />
-        </Card>
-      </div>
-
-      {d.wallet ? (
-        <Card title="Wallet" subtitle="Pay as you go">
-          <KeyValue
-            items={[
-              {
-                label: "Balance",
-                value: (
-                  <span
-                    style={
-                      d.wallet.balance_cents < 0
-                        ? { color: "var(--status-danger-text)" }
-                        : undefined
-                    }
-                  >
-                    {formatMoney(d.wallet.balance_cents, d.wallet.currency)}
-                  </span>
-                ),
-                mono: true,
-              },
-              {
-                label: "On hold",
-                value:
-                  d.wallet.pending_balance_cents > 0
-                    ? formatMoney(d.wallet.pending_balance_cents, d.wallet.currency)
-                    : "—",
-                mono: true,
-              },
-              { label: "Status", value: d.wallet.status },
-              {
-                label: "Commission",
-                value:
-                  d.wallet.commission_bps_override != null
-                    ? `${d.wallet.commission_bps_override / 100}%`
-                    : "platform default",
-              },
-            ]}
-          />
-        </Card>
-      ) : null}
-
-      <Card title="Recent orders" subtitle="Newest first" flush>
-        <DataTable
-          columns={orderColumns}
-          rows={d.recent_orders}
-          rowKey={(o) => o.id}
-          dense
-          caption={`Recent orders for ${d.store.name}`}
-          isFlagged={(o) => o.status === "cancelled" || o.payment_status === "failed"}
-          empty={
-            <EmptyState
-              kind="empty"
-              title="No orders yet"
-              body="This store has not taken an order."
+      {tab === "overview" ? (
+        <>
+          <div className="ak-metrics ak-metrics--4">
+            <MetricCard
+              label="Orders"
+              value={formatNumber(d.metrics.orders_count)}
+              note={
+                d.metrics.last_order_at
+                  ? `last ${formatDateTime(d.metrics.last_order_at)}`
+                  : "none yet"
+              }
+              icon="cart"
             />
-          }
-        />
-      </Card>
+            <MetricCard
+              label="Paid revenue"
+              value={formatMoneyShort(d.metrics.paid_revenue_cents, currency)}
+              icon="banknote"
+            />
+            <MetricCard
+              label="Products"
+              value={formatNumber(d.metrics.products_count)}
+              icon="package"
+            />
+            <MetricCard
+              label="Customers"
+              value={formatNumber(d.metrics.customers_count)}
+              icon="users"
+            />
+          </div>
 
-      {/* Which WhatsApp transport this merchant sends through, and the device
+          <ControlsCard d={d} storeId={storeId} />
+
+          {d.tenant?.is_demo ? (
+            <Card title="Demo lead" subtitle="Captured on the landing form">
+              <KeyValue
+                items={[
+                  { label: "Name", value: dash(d.tenant.demo_name) },
+                  { label: "Email", value: dash(d.tenant.demo_email), mono: true },
+                  { label: "WhatsApp", value: dash(d.tenant.demo_whatsapp), mono: true },
+                  {
+                    label: "Started",
+                    value: formatDateTime(d.tenant.demo_started_at),
+                    mono: true,
+                  },
+                ]}
+              />
+            </Card>
+          ) : null}
+
+          <div className="ak-2col">
+            <Card title="Plan and lifecycle" subtitle="Tenant">
+              <KeyValue items={planItems} />
+            </Card>
+            <Card title="Owner account" subtitle="User">
+              <KeyValue items={ownerItems} />
+            </Card>
+          </div>
+
+          <HealthCard insights={insights.data} loading={insights.isLoading} />
+          <SupportCard insights={insights.data} />
+        </>
+      ) : null}
+
+      {tab === "billing" ? (
+        <>
+          {d.tenant ? <BillingPanel d={d} storeId={storeId} insights={insights.data} /> : null}
+          {d.wallet ? (
+            <Card title="Wallet" subtitle="Pay as you go">
+              <KeyValue
+                items={[
+                  {
+                    label: "Balance",
+                    value: (
+                      <span
+                        style={
+                          d.wallet.balance_cents < 0
+                            ? { color: "var(--status-danger-text)" }
+                            : undefined
+                        }
+                      >
+                        {formatMoney(d.wallet.balance_cents, d.wallet.currency)}
+                      </span>
+                    ),
+                    mono: true,
+                  },
+                  {
+                    label: "On hold",
+                    value:
+                      d.wallet.pending_balance_cents > 0
+                        ? formatMoney(d.wallet.pending_balance_cents, d.wallet.currency)
+                        : "—",
+                    mono: true,
+                  },
+                  { label: "Status", value: d.wallet.status },
+                  {
+                    label: "Commission",
+                    value:
+                      d.wallet.commission_bps_override != null
+                        ? `${d.wallet.commission_bps_override / 100}%`
+                        : "platform default",
+                  },
+                ]}
+              />
+            </Card>
+          ) : null}
+          {d.wallet ? (
+            <Card title="Wallet ledger" subtitle="Last 50 entries, newest first" flush>
+              <DataTable
+                columns={ledgerColumns}
+                rows={ledger.data?.ledger ?? []}
+                rowKey={(t) => t.id}
+                dense
+                loading={ledger.isLoading}
+                caption={`Wallet ledger for ${d.store.name}`}
+                empty={<EmptyState kind="empty" title="No ledger entries" />}
+              />
+            </Card>
+          ) : null}
+        </>
+      ) : null}
+
+      {tab === "overview" ? (
+        <Card title="Recent orders" subtitle="Newest first" flush>
+          <DataTable
+            columns={orderColumns}
+            rows={d.recent_orders}
+            rowKey={(o) => o.id}
+            dense
+            caption={`Recent orders for ${d.store.name}`}
+            isFlagged={(o) => o.status === "cancelled" || o.payment_status === "failed"}
+            empty={
+              <EmptyState
+                kind="empty"
+                title="No orders yet"
+                body="This store has not taken an order."
+              />
+            }
+          />
+        </Card>
+      ) : null}
+
+      {tab === "integrations" ? (
+        <>
+          <UsageCard insights={insights.data} loading={insights.isLoading} />
+
+          {/* Which WhatsApp transport this merchant sends through, and the device
           pairing when it is GOWA. It lives here because this is the page staff
           already have open when a merchant calls about it. */}
-      <ApiAccessPanel tenantId={d.tenant?.id} storeName={d.store.name} />
+          <ApiAccessPanel tenantId={d.tenant?.id} storeName={d.store.name} />
 
-      <ApiTokensPanel tenantId={d.tenant?.id} storeName={d.store.name} />
+          <ApiTokensPanel tenantId={d.tenant?.id} storeName={d.store.name} />
 
-      <EntitlementsPanel tenantId={d.tenant?.id} />
+          <EntitlementsPanel tenantId={d.tenant?.id} />
 
-      <WhatsAppTransportPanel storeId={storeId} storeName={d.store.name} />
+          <WhatsAppTransportPanel storeId={storeId} storeName={d.store.name} />
+        </>
+      ) : null}
+
+      {tab === "activity" ? (
+        <Card title="Staff timeline" subtitle="Last 50 audit events for this merchant">
+          {insights.data?.timeline.length ? (
+            <AuditTimeline
+              entries={insights.data.timeline.map((e) => ({
+                id: e.id,
+                action: humanizeAction(e.event_type),
+                actor: e.actor_email ?? "system",
+                actorType:
+                  e.details?.actor_type === "staff"
+                    ? "staff"
+                    : e.actor_email
+                      ? "merchant"
+                      : "system",
+                timestamp: formatDateTime(e.created_at),
+                entity: e.resource_type
+                  ? `${e.resource_type} ${e.resource_id ?? ""}`.trim()
+                  : undefined,
+                note: typeof e.details?.reason === "string" ? e.details.reason : undefined,
+              }))}
+            />
+          ) : (
+            <EmptyState
+              kind="empty"
+              title={insights.isLoading ? "Loading…" : "Nothing recorded yet"}
+            />
+          )}
+        </Card>
+      ) : null}
     </DashboardLayout>
   );
 }
@@ -531,5 +667,446 @@ function ControlsCard({ d, storeId }: { d: MerchantDetailData; storeId: string }
         />
       ) : null}
     </Card>
+  );
+}
+
+type Health = MerchantInsights["health"][number];
+type Invoice = MerchantInsights["invoices"][number];
+type SupportRow = MerchantInsights["support_cases"]["recent"][number];
+
+const pct = (v: number) => `${v}%`;
+
+/** Per-store delivery outcomes over the health-score window (90 days). */
+function HealthCard({ insights, loading }: { insights?: MerchantInsights; loading: boolean }) {
+  const columns: DataTableColumn<Health>[] = [
+    { key: "store_name", header: "Store" },
+    {
+      key: "grade",
+      header: "Grade",
+      render: (h) => (h.score == null ? h.grade : `${h.grade} · ${h.score}`),
+    },
+    {
+      key: "cod_success_rate",
+      header: "COD success",
+      align: "end",
+      mono: true,
+      render: (h) => pct(h.cod_success_rate),
+    },
+    {
+      key: "cod_rejection_rate",
+      header: "COD rejection",
+      align: "end",
+      mono: true,
+      render: (h) => pct(h.cod_rejection_rate),
+    },
+    {
+      key: "return_rate",
+      header: "Return rate",
+      align: "end",
+      mono: true,
+      render: (h) => pct(h.return_rate),
+    },
+    {
+      key: "delivery_success_rate",
+      header: "Delivered",
+      align: "end",
+      mono: true,
+      render: (h) => pct(h.delivery_success_rate),
+    },
+    {
+      key: "orders_analyzed",
+      header: "Orders",
+      align: "end",
+      mono: true,
+      render: (h) => formatNumber(h.orders_analyzed),
+    },
+  ];
+  return (
+    <Card title="Store health" subtitle="Last 90 days" flush>
+      <DataTable
+        columns={columns}
+        rows={insights?.health ?? []}
+        rowKey={(h) => h.store_id}
+        dense
+        loading={loading}
+        caption="Store health"
+        isFlagged={(h) => h.cod_rejection_rate >= 25 || h.return_rate >= 25}
+        empty={<EmptyState kind="empty" title="No stores" />}
+      />
+    </Card>
+  );
+}
+
+function SupportCard({ insights }: { insights?: MerchantInsights }) {
+  const [, navigate] = useLocation();
+  const columns: DataTableColumn<SupportRow>[] = [
+    { key: "subject", header: "Subject" },
+    { key: "status", header: "Status", render: (c) => humanizeAction(c.status) },
+    { key: "priority", header: "Priority", render: (c) => humanizeAction(c.priority) },
+    {
+      key: "created_at",
+      header: "Opened",
+      mono: true,
+      render: (c) => formatDateTime(c.created_at),
+    },
+  ];
+  const open = insights?.support_cases.open ?? 0;
+  return (
+    <Card
+      title="Support cases"
+      subtitle={`${formatNumber(open)} open · 10 most recent`}
+      flush
+      actions={
+        <Button size="sm" variant="subtle" onClick={() => navigate("/support-cases")}>
+          All cases
+        </Button>
+      }
+    >
+      <DataTable
+        columns={columns}
+        rows={insights?.support_cases.recent ?? []}
+        rowKey={(c) => c.id}
+        dense
+        caption="Support cases for this merchant"
+        isFlagged={(c) => c.priority === "urgent" || c.priority === "high"}
+        empty={<EmptyState kind="empty" title="No support cases" />}
+      />
+    </Card>
+  );
+}
+
+const limit = (v: number | null) => (v == null ? "unlimited" : formatNumber(v));
+
+/** Public-API traffic (from the daily usage roll-up) and WhatsApp sends. */
+function UsageCard({ insights, loading }: { insights?: MerchantInsights; loading: boolean }) {
+  const u = insights?.api_usage;
+  return (
+    <div className="ak-2col">
+      <Card title="API usage" subtitle="Last 30 days · today is up to 5 minutes behind">
+        {u ? (
+          <KeyValue
+            items={[
+              { label: "Requests · 30d", value: formatNumber(u.requests_30d), mono: true },
+              { label: "Requests · today", value: formatNumber(u.requests_today), mono: true },
+              { label: "Throttled · 30d", value: formatNumber(u.throttled_30d), mono: true },
+              { label: "5xx errors · 30d", value: formatNumber(u.errors_5xx_30d), mono: true },
+              { label: "API access", value: u.limits.allowed ? "Allowed" : "Off" },
+              { label: "Per minute", value: limit(u.limits.per_minute), mono: true },
+              { label: "Per second", value: limit(u.limits.per_second), mono: true },
+              { label: "Monthly quota", value: limit(u.limits.monthly_quota), mono: true },
+              { label: "Key limit", value: limit(u.limits.key_limit), mono: true },
+            ]}
+          />
+        ) : (
+          <EmptyState kind="empty" title={loading ? "Loading…" : "No data"} />
+        )}
+      </Card>
+      <Card title="WhatsApp" subtitle="Template messages sent this calendar month">
+        {insights?.whatsapp.length ? (
+          <KeyValue
+            items={insights.whatsapp.map((w) => ({
+              label: w.store_name,
+              value: formatNumber(w.messages_this_month),
+              mono: true,
+            }))}
+          />
+        ) : (
+          <EmptyState kind="empty" title={loading ? "Loading…" : "No stores"} />
+        )}
+      </Card>
+    </div>
+  );
+}
+
+type BillingAction =
+  | { kind: "extend" }
+  | { kind: "pause" }
+  | { kind: "credit" }
+  | { kind: "refund"; invoice: Invoice };
+
+const INVOICE_STATUS: Record<string, NumuStatus> = {
+  paid: "paid",
+  refunded: "refunded",
+  failed: "failed",
+  void: "cancelled",
+};
+
+/** Extend trial, pause/resume billing, credit the wallet, refund an invoice. */
+function BillingPanel({
+  d,
+  storeId,
+  insights,
+}: {
+  d: MerchantDetailData;
+  storeId: string;
+  insights?: MerchantInsights;
+}) {
+  const queryClient = useQueryClient();
+  const tenantId = d.tenant!.id;
+  const billing = insights?.billing;
+  const paused = billing?.paused ?? false;
+  // Mirrors the API rule: a live trial, or one the expiry sweep made read-only.
+  const canExtend =
+    billing?.lifecycle_state === "trial" ||
+    (billing?.lifecycle_state === "read_only" && !billing.trial_converted_at);
+  const [days, setDays] = useState("7");
+  const [amount, setAmount] = useState("");
+  const [reason, setReason] = useState("");
+  const [action, setAction] = useState<BillingAction | null>(null);
+  const dayCount = Number(days);
+  const creditCents = parseMoney(amount);
+  const currency = d.wallet?.currency ?? "EGP";
+
+  const run = useMutation({
+    mutationFn: (a: BillingAction): Promise<unknown> => {
+      if (a.kind === "extend") return extendTrial(tenantId, dayCount, reason.trim());
+      if (a.kind === "pause") return pauseBilling(tenantId, !paused, reason.trim());
+      if (a.kind === "credit") return adjustWallet(tenantId, creditCents!, reason.trim());
+      return refundInvoice(tenantId, a.invoice.id, reason.trim());
+    },
+    onSuccess: (_r, a) => {
+      if (a.kind === "refund") {
+        toast.success("Invoice marked refunded", {
+          description: `Return ${formatMoney(a.invoice.amount_cents, a.invoice.currency)} to the merchant via InstaPay — no money was sent automatically.`,
+        });
+      } else {
+        toast.success(
+          a.kind === "extend"
+            ? `Trial extended by ${dayCount} days`
+            : a.kind === "pause"
+              ? paused
+                ? "Billing resumed"
+                : "Billing paused"
+              : `Credited ${formatMoney(creditCents, currency)}`,
+          { description: `${d.store.name} · recorded in the audit log` },
+        );
+      }
+      setAction(null);
+      setReason("");
+      if (a.kind === "credit") setAmount("");
+      void queryClient.invalidateQueries({ queryKey: ["merchant-insights", tenantId] });
+      void queryClient.invalidateQueries({ queryKey: ["merchant-detail", storeId] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-wallets"] });
+      void queryClient.invalidateQueries({ queryKey: ["merchants"] });
+    },
+    onError: (err: unknown) => toast.error(err instanceof Error ? err.message : String(err)),
+  });
+
+  const dialog = (a: BillingAction): { title: string; consequences: string[]; label: string } => {
+    if (a.kind === "extend")
+      return {
+        title: `Extend the trial by ${dayCount} days?`,
+        consequences: [
+          `The trial ends ${dayCount} days after the later of now and its current end date.`,
+          ...(billing?.lifecycle_state === "read_only"
+            ? [
+                "The store leaves read-only: the storefront unlocks and the scheduled deletion is cancelled.",
+              ]
+            : []),
+          "No charge is made.",
+        ],
+        label: "Extend trial",
+      };
+    if (a.kind === "pause")
+      return paused
+        ? {
+            title: "Resume billing?",
+            consequences: [
+              "Renewals, dunning, trial expiry and the read-only purge apply again on their next run.",
+              "Anything that came due while paused is picked up on that run.",
+            ],
+            label: "Resume billing",
+          }
+        : {
+            title: "Pause billing?",
+            consequences: [
+              "No renewal charge, retry, past-due state or dunning email while paused.",
+              "A trial does not expire and a read-only store is not deleted while paused.",
+              "A store that is already read-only stays locked. Pre-expiry reminder emails still go out.",
+            ],
+            label: "Pause billing",
+          };
+    if (a.kind === "credit")
+      return {
+        title: `Credit ${formatMoney(creditCents, currency)}?`,
+        consequences: [
+          "Added to the wallet balance as a manual adjustment.",
+          "The ledger row records you and the note.",
+        ],
+        label: "Give credit",
+      };
+    return {
+      title: `Refund ${formatMoney(a.invoice.amount_cents, a.invoice.currency)}?`,
+      consequences: [
+        "The invoice is marked refunded.",
+        "No money moves: return it to the merchant out of band (InstaPay).",
+        "The subscription period is not changed.",
+      ],
+      label: "Mark refunded",
+    };
+  };
+
+  const invoiceColumns: DataTableColumn<Invoice>[] = [
+    {
+      key: "period_start",
+      header: "Period",
+      mono: true,
+      render: (i) => `${formatDateTime(i.period_start)} → ${formatDateTime(i.period_end)}`,
+    },
+    {
+      key: "amount_cents",
+      header: "Amount",
+      align: "end",
+      mono: true,
+      render: (i) => formatMoney(i.amount_cents, i.currency),
+    },
+    {
+      key: "status",
+      header: "Status",
+      render: (i) => <StatusBadge status={INVOICE_STATUS[i.status] ?? "draft"} label={i.status} />,
+    },
+    { key: "paid_at", header: "Paid", mono: true, render: (i) => formatDateTime(i.paid_at) },
+    {
+      key: "actions",
+      header: "",
+      render: (i) =>
+        i.status === "paid" ? (
+          <Button
+            size="sm"
+            variant="danger-outline"
+            onClick={() => setAction({ kind: "refund", invoice: i })}
+          >
+            Refund
+          </Button>
+        ) : null,
+    },
+  ];
+
+  const current = action ? dialog(action) : null;
+
+  return (
+    <>
+      <Card title="Billing controls" subtitle="Each action asks for a reason and is audited">
+        <div className="ak-stack">
+          <div className="ak-row-line">
+            <span>
+              Trial
+              {billing?.expires_at ? ` · ends ${formatDateTime(billing.expires_at)}` : ""}
+            </span>
+            <span className="ak-cell-line">
+              <Input
+                aria-label="Days to extend"
+                type="number"
+                min={1}
+                max={90}
+                numeric
+                affix="days"
+                value={days}
+                onChange={(e) => setDays(e.target.value)}
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!canExtend || !(dayCount >= 1 && dayCount <= 90)}
+                onClick={() => setAction({ kind: "extend" })}
+              >
+                Extend trial
+              </Button>
+            </span>
+          </div>
+          <div className="ak-row-line">
+            <span className="ak-cell-line">
+              Billing
+              <Badge tone={paused ? "warning" : "neutral"} square>
+                {paused ? "Paused" : "Running"}
+              </Badge>
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              icon={paused ? "playCircle" : "slash"}
+              disabled={!billing}
+              onClick={() => setAction({ kind: "pause" })}
+            >
+              {paused ? "Resume billing" : "Pause billing"}
+            </Button>
+          </div>
+          <div className="ak-row-line">
+            <span>Wallet credit</span>
+            <span className="ak-cell-line">
+              <Input
+                aria-label="Credit amount"
+                inputMode="decimal"
+                numeric
+                affix={currency}
+                placeholder="0.00"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!creditCents || creditCents <= 0}
+                onClick={() => setAction({ kind: "credit" })}
+              >
+                Give credit
+              </Button>
+            </span>
+          </div>
+        </div>
+      </Card>
+
+      <Card title="Invoices" subtitle="Last 12 subscription invoices" flush>
+        <DataTable
+          columns={invoiceColumns}
+          rows={insights?.invoices ?? []}
+          rowKey={(i) => i.id}
+          dense
+          caption="Subscription invoices"
+          empty={<EmptyState kind="empty" title="No invoices" />}
+        />
+      </Card>
+
+      {action && current ? (
+        <ConfirmDialog
+          open
+          tone={
+            action.kind === "refund" || (action.kind === "pause" && !paused) ? "danger" : "warning"
+          }
+          title={current.title}
+          entity={[
+            { label: "Merchant", value: d.tenant?.name ?? d.store.name },
+            { label: "Tenant ID", value: tenantId, mono: true },
+            ...(action.kind === "refund"
+              ? [{ label: "Invoice", value: action.invoice.id, mono: true }]
+              : []),
+          ]}
+          consequences={current.consequences}
+          confirmLabel={run.isPending ? "Working…" : current.label}
+          onClose={() => setAction(null)}
+          onConfirm={() => {
+            if (run.isPending) return;
+            if (reason.trim().length < 3) {
+              toast.error(action.kind === "credit" ? "Add a note" : "Add a reason");
+              return;
+            }
+            run.mutate(action);
+          }}
+        >
+          <FormField
+            label={action.kind === "credit" ? "Note" : "Reason"}
+            hint="Saved in the audit log"
+            required
+          >
+            <Textarea
+              value={reason}
+              maxLength={500}
+              rows={3}
+              onChange={(e) => setReason(e.target.value)}
+            />
+          </FormField>
+        </ConfirmDialog>
+      ) : null}
+    </>
   );
 }

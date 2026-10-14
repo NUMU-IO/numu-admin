@@ -17,6 +17,11 @@ import type { QueueCounts } from "@/services/dashboardService";
 
 export type QueueKey = keyof QueueCounts;
 
+/** Limited staff roles. A full admin (no scope, or "all") sees everything. */
+export type StaffScope = "support" | "finance" | "ops";
+
+const ANY: StaffScope[] = ["support", "finance", "ops"];
+
 export interface AdminNavItem {
   id: string;
   label: string;
@@ -26,6 +31,11 @@ export interface AdminNavItem {
   queueKey?: QueueKey;
   /** Renders the badge in Terracotta — this queue is breaching, not just full. */
   alertQueue?: boolean;
+  /**
+   * Limited scopes that can open this page. Mirrors `ADMIN_SCOPES` in the API,
+   * which is the real guard; this only hides what would 403. Absent = full admins only.
+   */
+  scopes?: StaffScope[];
 }
 
 export interface AdminNavSection {
@@ -35,13 +45,27 @@ export interface AdminNavSection {
 
 export const ADMIN_NAV: AdminNavSection[] = [
   {
-    items: [{ id: "overview", label: "Overview", icon: "layout", href: "/" }],
+    items: [{ id: "overview", label: "Overview", icon: "layout", href: "/", scopes: ANY }],
   },
   {
     label: "Merchants",
     items: [
-      { id: "merchants", label: "Merchants", icon: "building", href: "/merchants" },
-      { id: "customers", label: "Customers", icon: "users", href: "/customers" },
+      {
+        id: "merchants",
+        label: "Merchants",
+        icon: "building",
+        href: "/merchants",
+        // Finance reads it to find the tenant behind a payment; billing
+        // actions on the detail page are finance's in the API.
+        scopes: ["ops", "finance"],
+      },
+      {
+        id: "customers",
+        label: "Customers",
+        icon: "users",
+        href: "/customers",
+        scopes: ["support"],
+      },
       { id: "leads", label: "Leads", icon: "userPlus", href: "/leads" },
       // Sits with Merchants rather than in Operations: it works on the lead
       // list directly, and an operator who has just read the funnel is one
@@ -52,7 +76,7 @@ export const ADMIN_NAV: AdminNavSection[] = [
   {
     label: "Commerce",
     items: [
-      { id: "orders", label: "Orders", icon: "cart", href: "/orders" },
+      { id: "orders", label: "Orders", icon: "cart", href: "/orders", scopes: ["support"] },
       { id: "analytics", label: "Analytics", icon: "barChart", href: "/analytics" },
       { id: "reports", label: "Reports", icon: "fileText", href: "/reports" },
     ],
@@ -62,7 +86,13 @@ export const ADMIN_NAV: AdminNavSection[] = [
     items: [
       { id: "billing", label: "Billing", icon: "creditCard", href: "/billing" },
       { id: "plans", label: "Pricing plans", icon: "tag", href: "/pricing-plans" },
-      { id: "features", label: "Features & plans", icon: "sliders", href: "/features" },
+      {
+        id: "features",
+        label: "Features & plans",
+        icon: "sliders",
+        href: "/features",
+        scopes: ["ops"],
+      },
       { id: "limits", label: "Plan limits", icon: "sliders", href: "/plan-limits" },
       {
         id: "wallets",
@@ -70,6 +100,7 @@ export const ADMIN_NAV: AdminNavSection[] = [
         icon: "banknote",
         href: "/wallets",
         queueKey: "walletTopups",
+        scopes: ["finance"],
       },
       {
         id: "subscription-payments",
@@ -77,12 +108,14 @@ export const ADMIN_NAV: AdminNavSection[] = [
         icon: "clipboard",
         href: "/subscription-payments",
         queueKey: "subscriptionPayments",
+        scopes: ["finance"],
       },
       {
         id: "reconciliation",
         label: "Reconciliation",
         icon: "database",
         href: "/reconciliation",
+        scopes: ["finance"],
       },
     ],
   },
@@ -96,6 +129,7 @@ export const ADMIN_NAV: AdminNavSection[] = [
         href: "/trust-risk",
         queueKey: "riskReview",
         alertQueue: true,
+        scopes: ["support"],
       },
       {
         id: "whatsapp",
@@ -103,12 +137,14 @@ export const ADMIN_NAV: AdminNavSection[] = [
         icon: "messageCircle",
         href: "/whatsapp-access",
         queueKey: "whatsappAccess",
+        scopes: ["ops"],
       },
       {
         id: "api-tokens",
         label: "API tokens",
         icon: "plug",
         href: "/api-tokens",
+        scopes: ["ops"],
       },
       {
         id: "support-cases",
@@ -116,6 +152,7 @@ export const ADMIN_NAV: AdminNavSection[] = [
         icon: "inbox",
         href: "/support-cases",
         queueKey: "supportCases",
+        scopes: ["support"],
       },
       {
         id: "campaigns",
@@ -133,6 +170,7 @@ export const ADMIN_NAV: AdminNavSection[] = [
         label: "Themes",
         icon: "package",
         href: "/marketplace/themes",
+        scopes: ["ops"],
       },
       {
         id: "marketplace-review",
@@ -141,14 +179,16 @@ export const ADMIN_NAV: AdminNavSection[] = [
         href: "/marketplace/review",
         queueKey: "marketplaceReview",
         alertQueue: true,
+        scopes: ["ops"],
       },
       {
         id: "snapshots",
         label: "Snapshots",
         icon: "history",
         href: "/marketplace/snapshots",
+        scopes: ["ops"],
       },
-      { id: "themes", label: "Theme catalogue", icon: "store", href: "/themes" },
+      { id: "themes", label: "Theme catalogue", icon: "store", href: "/themes", scopes: ["ops"] },
       {
         id: "marketplace-reviews",
         label: "Ratings & reviews",
@@ -162,13 +202,37 @@ export const ADMIN_NAV: AdminNavSection[] = [
     // review, App catalog and Webhook health join this section in Phases 3-4.
     label: "Apps & Partners",
     items: [
-      { id: "partners", label: "Partners", icon: "plug", href: "/apps/partners" },
-      { id: "app-review", label: "App review", icon: "shieldAlert", href: "/apps/review" },
-      { id: "app-catalog", label: "App catalog", icon: "package", href: "/apps/catalog" },
+      { id: "partners", label: "Partners", icon: "plug", href: "/apps/partners", scopes: ["ops"] },
+      {
+        id: "app-review",
+        label: "App review",
+        icon: "shieldAlert",
+        href: "/apps/review",
+        scopes: ["ops"],
+      },
+      {
+        id: "app-catalog",
+        label: "App catalog",
+        icon: "package",
+        href: "/apps/catalog",
+        scopes: ["ops"],
+      },
       { id: "app-reviews", label: "App reviews", icon: "star", href: "/app-reviews" },
       { id: "partner-support", label: "Partner support", icon: "inbox", href: "/partner-support" },
-      { id: "app-billing", label: "App billing", icon: "banknote", href: "/apps/billing" },
-      { id: "partner-notices", label: "Partner notices", icon: "bell", href: "/apps/notices" },
+      {
+        id: "app-billing",
+        label: "App billing",
+        icon: "banknote",
+        href: "/apps/billing",
+        scopes: ["ops"],
+      },
+      {
+        id: "partner-notices",
+        label: "Partner notices",
+        icon: "bell",
+        href: "/apps/notices",
+        scopes: ["ops"],
+      },
     ],
   },
   {
@@ -188,10 +252,18 @@ export const ADMIN_NAV: AdminNavSection[] = [
       },
       { id: "flags", label: "Release flags", icon: "flag", href: "/flags" },
       {
+        id: "audit",
+        label: "Audit log",
+        icon: "history",
+        href: "/audit",
+        scopes: ANY,
+      },
+      {
         id: "security",
         label: "Security (2FA)",
         icon: "shieldAlert",
         href: "/security",
+        scopes: ANY,
       },
       {
         id: "hub-nav",
@@ -213,6 +285,15 @@ export const ADMIN_NAV: AdminNavSection[] = [
 ];
 
 const ALL_ITEMS = ADMIN_NAV.flatMap((s) => s.items);
+
+/** The navigation an admin with this scope can open; empty sections drop out. */
+export function navForScope(scope: string | null | undefined): AdminNavSection[] {
+  if (!scope || scope === "all") return ADMIN_NAV;
+  return ADMIN_NAV.map((s) => ({
+    ...s,
+    items: s.items.filter((i) => i.scopes?.includes(scope as StaffScope)),
+  })).filter((s) => s.items.length > 0);
+}
 
 /**
  * Which nav item a URL belongs to.

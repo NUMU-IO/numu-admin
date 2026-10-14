@@ -226,3 +226,38 @@ export interface OrderDetail {
 export function getOrder(orderId: string): Promise<OrderDetail> {
   return apiClient<OrderDetail>(`/admin/orders/${orderId}`);
 }
+
+export function markOrderPaid(orderId: string): Promise<OrderDetail> {
+  return apiClient<OrderDetail>(`/admin/orders/${orderId}/mark-paid`, { method: "POST" });
+}
+
+export function confirmOrderDeposit(orderId: string): Promise<OrderDetail> {
+  return apiClient<OrderDetail>(`/admin/orders/${orderId}/confirm-deposit`, { method: "POST" });
+}
+
+export function resendOrderWhatsApp(orderId: string): Promise<{ sent: boolean }> {
+  return apiClient<{ sent: boolean }>(`/admin/orders/${orderId}/resend-whatsapp`, {
+    method: "POST",
+  });
+}
+
+export interface OrderActivity {
+  id: string;
+  kind: "comment" | "system_event";
+  event_type: string | null;
+  body: string;
+  user_name: string | null;
+  created_at: string;
+}
+
+export async function getOrderActivities(orderId: string): Promise<OrderActivity[]> {
+  const r = await apiClient<{ items: OrderActivity[] }>(`/admin/orders/${orderId}/activities`);
+  return r.items;
+}
+
+export function addOrderNote(orderId: string, body: string): Promise<OrderActivity> {
+  return apiClient<OrderActivity>(`/admin/orders/${orderId}/notes`, {
+    method: "POST",
+    body: JSON.stringify({ body }),
+  });
+}
