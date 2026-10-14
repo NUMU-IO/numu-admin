@@ -55,7 +55,9 @@ export const ADMIN_NAV: AdminNavSection[] = [
         label: "Merchants",
         icon: "building",
         href: "/merchants",
-        scopes: ["ops"],
+        // Finance reads it to find the tenant behind a payment; billing
+        // actions on the detail page are finance's in the API.
+        scopes: ["ops", "finance"],
       },
       {
         id: "customers",

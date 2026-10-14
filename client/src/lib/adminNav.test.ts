@@ -87,6 +87,8 @@ describe("navForScope", () => {
     expect(ids("support")).not.toContain("settings");
     expect(ids("finance")).toContain("wallets");
     expect(ids("ops")).toContain("merchants");
+    expect(ids("finance")).toContain("merchants");
+    expect(ids("support")).not.toContain("merchants");
     for (const scope of ["support", "finance", "ops"]) expect(ids(scope)).toContain("audit");
   });
 

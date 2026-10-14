@@ -32,6 +32,7 @@ import {
   type DataTableColumn,
 } from "@/ds";
 import { formatDateTime, formatMoney, formatNumber, sentenceCase } from "@/lib/format";
+import { runLimited } from "@/lib/utils";
 import { downloadCSV, toCSV } from "@/pages/Reports";
 import {
   addOrderNote,
@@ -168,7 +169,7 @@ export default function Orders() {
     // ponytail: one PATCH per order from the browser; a bulk endpoint when
     // admins start selecting more than a page (>100) at a time.
     mutationFn: async ({ ids, status }: { ids: string[]; status: string }) => {
-      const results = await Promise.allSettled(ids.map((id) => updateOrderStatus(id, status)));
+      const results = await runLimited(ids, 4, (id) => updateOrderStatus(id, status));
       const failed = results.filter((r): r is PromiseRejectedResult => r.status === "rejected");
       if (failed.length === ids.length) throw failed[0].reason;
       return failed.length;
@@ -541,11 +542,13 @@ function OrderDrawer({
   });
   const [note, setNote] = useState("");
   const [cancelling, setCancelling] = useState(false);
+  const [markingPaid, setMarkingPaid] = useState(false);
   const act = useMutation({
     mutationFn: (run: () => Promise<string>) => run(),
     onSuccess: (message) => {
       toast.success(message, { description: "Recorded in the audit log" });
       setCancelling(false);
+      setMarkingPaid(false);
       queryClient.invalidateQueries({ queryKey: ["orders"] });
     },
     onError: (e) => toast.error((e as Error).message || "Action failed"),
@@ -611,9 +614,7 @@ function OrderDrawer({
                 variant="subtle"
                 icon="check"
                 disabled={act.isPending}
-                onClick={() =>
-                  act.mutate(() => markOrderPaid(o.id).then(() => "Order marked as paid"))
-                }
+                onClick={() => setMarkingPaid(true)}
               >
                 Mark paid
               </Button>
@@ -907,6 +908,25 @@ function OrderDrawer({
         onClose={() => setCancelling(false)}
         onConfirm={() =>
           o && act.mutate(() => updateOrderStatus(o.id, "cancelled").then(() => "Order cancelled"))
+        }
+      />
+      <ConfirmDialog
+        open={markingPaid}
+        tone="warning"
+        title="Mark this order paid?"
+        entity={[
+          { label: "Order", value: o?.order_number ?? "", mono: true },
+          { label: "Value", value: o ? money(o.total) : "", mono: true },
+        ]}
+        consequences={[
+          "Records the full value as collected outside a payment gateway.",
+          "Issues the invoice, books NUMU's commission and emails the customer.",
+          "Only do this once the money has actually reached the merchant.",
+        ]}
+        confirmLabel="Mark paid"
+        onClose={() => setMarkingPaid(false)}
+        onConfirm={() =>
+          o && act.mutate(() => markOrderPaid(o.id).then(() => "Order marked as paid"))
         }
       />
     </Drawer>

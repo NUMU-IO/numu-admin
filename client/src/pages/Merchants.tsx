@@ -34,6 +34,8 @@ import {
   type DataTableColumn,
 } from "@/ds";
 import { formatDate, formatMoneyShort, formatNumber } from "@/lib/format";
+import { runLimited } from "@/lib/utils";
+import { csvCell } from "@/pages/Reports";
 import {
   getMerchantStats,
   getMerchants,
@@ -379,16 +381,18 @@ export default function Merchants() {
   // once staff routinely act on more than ~100 at a time.
   const bulkMutation = useMutation({
     mutationFn: async (action: Bulk) => {
-      const calls =
+      const calls: (() => Promise<unknown>)[] =
         action === "plan"
           ? // Plan lives on the tenant; a merchant with two stores is one call.
-            Array.from(new Set(selectedRows.map((m) => m.tenantId))).map((t) =>
-              t ? updateTenant(t, { plan: bulkPlan }) : Promise.reject(new Error("No tenant")),
+            Array.from(new Set(selectedRows.map((m) => m.tenantId))).map(
+              (t) => () =>
+                t ? updateTenant(t, { plan: bulkPlan }) : Promise.reject(new Error("No tenant")),
             )
-          : selectedRows.map((m) =>
-              updateMerchantStatus(m.merchantId, action === "suspend" ? "suspended" : "active"),
+          : selectedRows.map(
+              (m) => () =>
+                updateMerchantStatus(m.merchantId, action === "suspend" ? "suspended" : "active"),
             );
-      return Promise.allSettled(calls);
+      return runLimited(calls, 4, (call) => call());
     },
     onSuccess: (results) => {
       const failed = results.filter((r) => r.status === "rejected").length;
@@ -912,7 +916,7 @@ function exportCsv(rows: Merchant[]) {
       String(m.totalOrders ?? 0),
       m.createdAt.toISOString(),
     ]
-      .map((cell) => `"${String(cell).replace(/"/g, '""')}"`)
+      .map(csvCell)
       .join(","),
   );
   const blob = new Blob([[header.join(","), ...body].join("\n")], {
