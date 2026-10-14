@@ -30,6 +30,7 @@ import {
   Pagination,
   Select,
   StatusBadge,
+  Tabs,
   type DataTableColumn,
 } from "@/ds";
 import { formatDate, formatMoneyShort, formatNumber } from "@/lib/format";
@@ -70,6 +71,7 @@ export default function Merchants() {
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
 
+  const [tab, setTab] = useState<"merchants" | "internal">("merchants");
   const [search, setSearch] = useState("");
   const [view, setView] = useState("all");
   const [page, setPage] = useState(1);
@@ -87,6 +89,7 @@ export default function Merchants() {
     offset: (page - 1) * PAGE_SIZE,
     status: view !== "all" ? view : undefined,
     search: search || undefined,
+    internal: tab === "internal" ? ("only" as const) : undefined,
   };
 
   const { data, isLoading } = useQuery({
@@ -107,10 +110,9 @@ export default function Merchants() {
     mutationFn: ({ id, status }: { id: string; status: string }) =>
       updateMerchantStatus(id, status),
     onSuccess: (_d, v) => {
-      toast.success(
-        v.status === "suspended" ? "Store suspended" : "Store status updated",
-        { description: `${v.id} · recorded in the audit log` },
-      );
+      toast.success(v.status === "suspended" ? "Store suspended" : "Store status updated", {
+        description: `${v.id} · recorded in the audit log`,
+      });
       setSuspending(null);
       invalidate();
     },
@@ -133,8 +135,8 @@ export default function Merchants() {
     onSuccess: (_d, v) => {
       toast.success(
         v.isInternal
-          ? "Marked internal — excluded from every platform aggregate"
-          : "Marked real — included in platform aggregates",
+          ? "Marked internal — moved to the Internal tab and excluded from platform aggregates"
+          : "Marked real — moved to Merchants and included in platform aggregates",
       );
       invalidate();
     },
@@ -189,7 +191,11 @@ export default function Merchants() {
         <div>
           <div className="ntb__primary ak-cell-line">
             <span>{m.name}</span>
-            {m.isInternal ? <Badge tone="warning" icon="flag" square>Internal</Badge> : null}
+            {m.isInternal ? (
+              <Badge tone="warning" icon="flag" square>
+                Internal
+              </Badge>
+            ) : null}
             {m.founderCohort ? (
               <Badge
                 tone="warning"
@@ -233,15 +239,15 @@ export default function Merchants() {
       header: "Plan",
       render: (m) => (
         <div className="ak-cell-line">
-          <Badge tone="neutral" square>{m.plan}</Badge>
+          <Badge tone="neutral" square>
+            {m.plan}
+          </Badge>
           {/* A trial without its remaining days answers "are they paying?"
               and not "when do I need to call them?", which is the question
               this screen exists for. Under a week reads as a warning. */}
           {m.trialDaysRemaining !== null ? (
             <Badge tone={m.trialDaysRemaining <= 7 ? "warning" : "info"} square>
-              {m.trialDaysRemaining === 0
-                ? "ends today"
-                : `${m.trialDaysRemaining}d left`}
+              {m.trialDaysRemaining === 0 ? "ends today" : `${m.trialDaysRemaining}d left`}
             </Badge>
           ) : null}
         </div>
@@ -275,11 +281,11 @@ export default function Merchants() {
         <div className="ak-rowactions" onClick={(e) => e.stopPropagation()}>
           <IconButton
             icon="flag"
-            label={m.isInternal ? "Mark as a real merchant" : "Mark as internal"}
+            label={tab === "internal" ? "Mark as a real merchant" : "Mark as internal"}
             size="sm"
             disabled={internalMutation.isPending}
             onClick={() =>
-              internalMutation.mutate({ id: m.merchantId, isInternal: !m.isInternal })
+              internalMutation.mutate({ id: m.merchantId, isInternal: tab !== "internal" })
             }
           />
           <IconButton
@@ -316,9 +322,7 @@ export default function Merchants() {
               icon="playCircle"
               label="Reinstate this store"
               size="sm"
-              onClick={() =>
-                statusMutation.mutate({ id: m.merchantId, status: "active" })
-              }
+              onClick={() => statusMutation.mutate({ id: m.merchantId, status: "active" })}
             />
           ) : (
             <IconButton
@@ -338,7 +342,20 @@ export default function Merchants() {
   return (
     <DashboardLayout
       title="Merchants"
-      subtitle="Every store on the platform, including internal ones."
+      subtitle="Every merchant store on the platform. Internal and demo stores are under Internal."
+      tabs={
+        <Tabs
+          tabs={[
+            { id: "merchants", label: "Merchants" },
+            { id: "internal", label: "Internal" },
+          ]}
+          active={tab}
+          onChange={(id) => {
+            setTab(id as "merchants" | "internal");
+            setPage(1);
+          }}
+        />
+      }
     >
       <div className="ak-metrics ak-metrics--4">
         <MetricCard
@@ -387,12 +404,7 @@ export default function Merchants() {
           }}
           searchPlaceholder="Name, email or subdomain"
           actions={
-            <Button
-              variant="subtle"
-              size="sm"
-              icon="download"
-              onClick={() => exportCsv(merchants)}
-            >
+            <Button variant="subtle" size="sm" icon="download" onClick={() => exportCsv(merchants)}>
               Export CSV
             </Button>
           }
@@ -402,17 +414,25 @@ export default function Merchants() {
           rows={merchants}
           rowKey={(m) => m.merchantId}
           loading={isLoading}
-          caption="Merchants on the platform"
+          caption={tab === "internal" ? "Internal merchants" : "Merchants on the platform"}
           onRowClick={(m) => navigate(`/merchants/${m.merchantId}`)}
           isFlagged={(m) => m.status === "suspended"}
           empty={
             <EmptyState
               kind={search || view !== "all" ? "noResults" : "empty"}
-              title={search || view !== "all" ? "Nothing matches" : "No merchants yet"}
+              title={
+                search || view !== "all"
+                  ? "Nothing matches"
+                  : tab === "internal"
+                    ? "No internal merchants"
+                    : "No merchants yet"
+              }
               body={
                 search || view !== "all"
                   ? "Widen the search or switch to another saved view."
-                  : "A merchant appears here as soon as their first store is created."
+                  : tab === "internal"
+                    ? "Stores marked internal and demo stores appear here."
+                    : "A merchant appears here as soon as their first store is created."
               }
               action={
                 search || view !== "all" ? (
@@ -458,8 +478,7 @@ export default function Merchants() {
         confirmLabel="Suspend store"
         onClose={() => setSuspending(null)}
         onConfirm={() =>
-          suspending &&
-          statusMutation.mutate({ id: suspending.merchantId, status: "suspended" })
+          suspending && statusMutation.mutate({ id: suspending.merchantId, status: "suspended" })
         }
       />
 
@@ -479,9 +498,7 @@ export default function Merchants() {
         ]}
         confirmLabel="Start session"
         onClose={() => setImpersonating(null)}
-        onConfirm={() =>
-          impersonating && impersonateMutation.mutate(impersonating.merchantId)
-        }
+        onConfirm={() => impersonating && impersonateMutation.mutate(impersonating.merchantId)}
       />
 
       <Dialog
@@ -506,8 +523,7 @@ export default function Merchants() {
               loading={ocrMutation.isPending}
               disabled={requiresPrivacyAck && !ocrPrivacyAck}
               onClick={() =>
-                ocrTarget &&
-                ocrMutation.mutate({ id: ocrTarget.merchantId, provider: ocrProvider })
+                ocrTarget && ocrMutation.mutate({ id: ocrTarget.merchantId, provider: ocrProvider })
               }
             >
               Save provider
@@ -626,7 +642,18 @@ function exportCsv(rows: Merchant[]) {
   }
   // trial_ends_at rides along so a call list can be sorted by it in a sheet,
   // which is what the export is for.
-  const header = ["store_id", "name", "email", "domain", "status", "plan", "trial_ends_at", "revenue_piasters", "orders", "created_at"];
+  const header = [
+    "store_id",
+    "name",
+    "email",
+    "domain",
+    "status",
+    "plan",
+    "trial_ends_at",
+    "revenue_piasters",
+    "orders",
+    "created_at",
+  ];
   const body = rows.map((m) =>
     [
       m.merchantId,

@@ -9,11 +9,15 @@
  * One backend call renders the whole page: store identity and status, tenant
  * lifecycle and billing, the demo-lead capture, the owner account, the
  * pay-as-you-go wallet, commerce metrics and the five most recent orders.
+ *
+ * The Controls card carries the three levers staff reach for most — suspend,
+ * change plan, mark internal — each behind a confirmation.
  */
 
 import DashboardLayout from "@/components/DashboardLayout";
 import { DashboardLayoutSkeleton } from "@/components/DashboardLayoutSkeleton";
 import { ApiAccessPanel } from "@/components/merchants/ApiAccessPanel";
+import { ApiTokensPanel } from "@/components/merchants/ApiTokensPanel";
 import { EntitlementsPanel } from "@/components/merchants/EntitlementsPanel";
 import { WhatsAppTransportPanel } from "@/components/merchants/WhatsAppTransportPanel";
 import {
@@ -21,21 +25,29 @@ import {
   Banner,
   Button,
   Card,
+  ConfirmDialog,
   DataTable,
   EmptyState,
   KeyValue,
   MetricCard,
   NUMU_STATUS,
+  Select,
   StatusBadge,
   type DataTableColumn,
   type KeyValueItem,
 } from "@/ds";
-import { formatDateTime, formatMoney, formatNumber } from "@/lib/format";
+import { formatDateTime, formatMoney, formatMoneyShort, formatNumber } from "@/lib/format";
 import {
   getMerchantDetail,
+  toggleMerchantInternal,
+  updateMerchantStatus,
+  updateTenant,
   type MerchantDetail as MerchantDetailData,
 } from "@/services/merchantService";
-import { useQuery } from "@tanstack/react-query";
+import { FEATURES_QUERY_KEY, listFeatures } from "@/services/entitlementsAdminApi";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { toast } from "sonner";
 import { useLocation, useRoute } from "wouter";
 
 type NumuStatus = keyof typeof NUMU_STATUS;
@@ -120,8 +132,7 @@ export default function MerchantDetail() {
 
   const currency = d.store.default_currency ?? "EGP";
   const domain =
-    d.store.custom_domain ??
-    (d.store.subdomain ? `${d.store.subdomain}.numueg.app` : d.store.slug);
+    d.store.custom_domain ?? (d.store.subdomain ? `${d.store.subdomain}.numueg.app` : d.store.slug);
 
   const planItems: KeyValueItem[] = [
     { label: "Plan", value: dash(d.tenant?.plan) },
@@ -174,9 +185,7 @@ export default function MerchantDetail() {
     {
       key: "payment_status",
       header: "Payment",
-      render: (o) => (
-        <StatusBadge status={o.payment_status === "paid" ? "paid" : "pending"} />
-      ),
+      render: (o) => <StatusBadge status={o.payment_status === "paid" ? "paid" : "pending"} />,
     },
     {
       key: "total_cents",
@@ -210,7 +219,11 @@ export default function MerchantDetail() {
               label={d.tenant.lifecycle_state ?? "unknown"}
             />
           ) : null}
-          {d.tenant?.plan ? <Badge tone="neutral" square>{d.tenant.plan}</Badge> : null}
+          {d.tenant?.plan ? (
+            <Badge tone="neutral" square>
+              {d.tenant.plan}
+            </Badge>
+          ) : null}
         </>
       }
       meta={
@@ -242,13 +255,9 @@ export default function MerchantDetail() {
       }
     >
       {d.tenant?.is_demo ? (
-        <Banner
-          tone="warning"
-          icon="flag"
-          title="This is a demo tenant, not a paying merchant"
-        >
-          It is excluded from every platform aggregate and is deleted
-          automatically seven days after it was created.
+        <Banner tone="warning" icon="flag" title="This is a demo tenant, not a paying merchant">
+          It is excluded from every platform aggregate and is deleted automatically seven days after
+          it was created.
         </Banner>
       ) : null}
 
@@ -257,15 +266,13 @@ export default function MerchantDetail() {
           label="Orders"
           value={formatNumber(d.metrics.orders_count)}
           note={
-            d.metrics.last_order_at
-              ? `last ${formatDateTime(d.metrics.last_order_at)}`
-              : "none yet"
+            d.metrics.last_order_at ? `last ${formatDateTime(d.metrics.last_order_at)}` : "none yet"
           }
           icon="cart"
         />
         <MetricCard
           label="Paid revenue"
-          value={formatMoney(d.metrics.paid_revenue_cents, currency)}
+          value={formatMoneyShort(d.metrics.paid_revenue_cents, currency)}
           icon="banknote"
         />
         <MetricCard
@@ -279,6 +286,8 @@ export default function MerchantDetail() {
           icon="users"
         />
       </div>
+
+      <ControlsCard d={d} storeId={storeId} />
 
       {d.tenant?.is_demo ? (
         <Card title="Demo lead" subtitle="Captured on the landing form">
@@ -367,16 +376,160 @@ export default function MerchantDetail() {
       {/* Which WhatsApp transport this merchant sends through, and the device
           pairing when it is GOWA. It lives here because this is the page staff
           already have open when a merchant calls about it. */}
-      <ApiAccessPanel
-        tenantId={d.tenant?.id}
-        plan={d.tenant?.plan}
-        featureFlags={d.tenant?.feature_flags}
-        storeName={d.store.name}
-      />
+      <ApiAccessPanel tenantId={d.tenant?.id} storeName={d.store.name} />
+
+      <ApiTokensPanel tenantId={d.tenant?.id} storeName={d.store.name} />
 
       <EntitlementsPanel tenantId={d.tenant?.id} />
 
       <WhatsAppTransportPanel storeId={storeId} storeName={d.store.name} />
     </DashboardLayout>
+  );
+}
+
+type Control = "suspend" | "activate" | "plan" | "internal";
+
+/** Suspend / activate, change plan, mark internal — each confirmed first. */
+function ControlsCard({ d, storeId }: { d: MerchantDetailData; storeId: string }) {
+  const queryClient = useQueryClient();
+  const tenantId = d.tenant?.id;
+  const currentPlan = d.tenant?.plan ?? "";
+  const isInternal = d.tenant?.is_internal ?? false;
+  const isActive = d.store.status === "active";
+  const [plan, setPlan] = useState(currentPlan);
+  const [confirm, setConfirm] = useState<Control | null>(null);
+
+  // The entitlement catalog's plans are the ones the API accepts.
+  const catalog = useQuery({ queryKey: FEATURES_QUERY_KEY, queryFn: listFeatures });
+  const planOptions = (catalog.data?.plans ?? [])
+    .filter((p) => !p.startsWith("addon:"))
+    .map((p) => ({ value: p, label: p }));
+  if (currentPlan && !planOptions.some((o) => o.value === currentPlan)) {
+    planOptions.unshift({ value: currentPlan, label: currentPlan });
+  }
+
+  const run = useMutation({
+    mutationFn: (c: Control): Promise<unknown> => {
+      if (c === "suspend") return updateMerchantStatus(storeId, "suspended");
+      if (c === "activate") return updateMerchantStatus(storeId, "active");
+      if (c === "plan") return updateTenant(tenantId!, { plan });
+      return toggleMerchantInternal(storeId, !isInternal);
+    },
+    onSuccess: (_r, c) => {
+      toast.success(
+        c === "suspend"
+          ? "Store suspended"
+          : c === "activate"
+            ? "Store activated"
+            : c === "plan"
+              ? `Plan changed to ${plan}`
+              : isInternal
+                ? "Marked as a real merchant"
+                : "Marked internal — excluded from platform aggregates",
+        { description: `${d.store.name} · recorded in the audit log` },
+      );
+      setConfirm(null);
+      void queryClient.invalidateQueries({ queryKey: ["merchant-detail", storeId] });
+      void queryClient.invalidateQueries({ queryKey: ["merchants"] });
+      void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      void queryClient.invalidateQueries({ queryKey: ["api-access", tenantId] });
+    },
+    onError: (err: unknown) => toast.error(err instanceof Error ? err.message : String(err)),
+  });
+
+  const dialog: Record<Control, { title: string; consequences: string[]; label: string }> = {
+    suspend: {
+      title: `Suspend ${d.store.name}?`,
+      consequences: [
+        "The storefront stops serving shoppers immediately.",
+        "The merchant's API access is off while suspended.",
+        "The merchant sees a suspension notice in the Merchant Hub.",
+        "Activating the store restores it exactly as it was.",
+      ],
+      label: "Suspend store",
+    },
+    activate: {
+      title: `Activate ${d.store.name}?`,
+      consequences: ["The storefront serves shoppers again.", "The merchant regains hub access."],
+      label: "Activate store",
+    },
+    plan: {
+      title: `Change plan to ${plan}?`,
+      consequences: [
+        `${currentPlan || "No plan"} → ${plan}. Limits and features follow the new plan immediately.`,
+        "No charge or refund is made — billing is not touched.",
+      ],
+      label: "Change plan",
+    },
+    internal: {
+      title: isInternal ? "Mark as a real merchant?" : "Mark as internal?",
+      consequences: isInternal
+        ? ["The store moves back to the Merchants list.", "It counts in platform aggregates again."]
+        : [
+            "The store moves to the Internal tab of the Merchants list.",
+            "It is excluded from every platform aggregate.",
+          ],
+      label: isInternal ? "Mark as real" : "Mark as internal",
+    },
+  };
+
+  return (
+    <Card title="Controls" subtitle="Staff actions">
+      <div className="ak-stack">
+        <div className="ak-row-line">
+          <span>Store status</span>
+          <Button
+            size="sm"
+            variant={isActive ? "danger-outline" : "outline"}
+            icon={isActive ? "slash" : "playCircle"}
+            onClick={() => setConfirm(isActive ? "suspend" : "activate")}
+          >
+            {isActive ? "Suspend store" : "Activate store"}
+          </Button>
+        </div>
+        <div className="ak-row-line">
+          <span>Plan</span>
+          <span className="ak-cell-line">
+            <Select
+              aria-label="Plan"
+              value={plan}
+              disabled={!tenantId}
+              onChange={(e) => setPlan(e.target.value)}
+              options={planOptions}
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!tenantId || !plan || plan === currentPlan}
+              onClick={() => setConfirm("plan")}
+            >
+              Change plan
+            </Button>
+          </span>
+        </div>
+        <div className="ak-row-line">
+          <span>Internal</span>
+          <Button size="sm" variant="outline" icon="flag" onClick={() => setConfirm("internal")}>
+            {isInternal ? "Mark as a real merchant" : "Mark as internal"}
+          </Button>
+        </div>
+      </div>
+
+      {confirm ? (
+        <ConfirmDialog
+          open
+          tone={confirm === "suspend" ? "danger" : "warning"}
+          title={dialog[confirm].title}
+          entity={[
+            { label: "Store", value: d.store.name },
+            { label: "Store ID", value: d.store.id, mono: true },
+          ]}
+          consequences={dialog[confirm].consequences}
+          confirmLabel={run.isPending ? "Working…" : dialog[confirm].label}
+          onClose={() => setConfirm(null)}
+          onConfirm={() => !run.isPending && run.mutate(confirm)}
+        />
+      ) : null}
+    </Card>
   );
 }

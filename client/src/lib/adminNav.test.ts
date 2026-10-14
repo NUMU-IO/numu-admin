@@ -13,7 +13,14 @@
 
 import { describe, expect, it } from "vitest";
 import { ADMIN_NAV, navIdForPath, navTrailForPath } from "./adminNav";
-import { formatCompact, formatMoney, formatMoneyShort, formatNumber, parseMoney } from "./format";
+import {
+  formatCompact,
+  formatMoney,
+  formatMoneyShort,
+  formatNumber,
+  humanizeAction,
+  parseMoney,
+} from "./format";
 
 describe("navIdForPath", () => {
   it("lights Overview only on the root", () => {
@@ -102,5 +109,19 @@ describe("formatCompact", () => {
     expect(formatCompact(12_000)).toBe("12k");
     expect(formatCompact(2_400_000)).toBe("2.4M");
     expect(formatCompact(0)).toBe("0");
+  });
+});
+
+describe("humanizeAction", () => {
+  it("reads order status transitions", () => {
+    expect(humanizeAction("status:shipped->delivered")).toBe("Order Shipped → Delivered");
+    expect(humanizeAction("status:PAYMENT_FAILED->cancelled")).toBe(
+      "Order Payment failed → Cancelled",
+    );
+  });
+
+  it("sentence-cases any other code", () => {
+    expect(humanizeAction("app_listing_flags")).toBe("App listing flags");
+    expect(humanizeAction("store-suspended")).toBe("Store suspended");
   });
 });

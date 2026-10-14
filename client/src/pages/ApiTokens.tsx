@@ -1,32 +1,29 @@
 /**
  * API tokens — every merchant token, and what each one has been doing.
  *
- * Read-only. Merchants mint and revoke their own tokens in the hub; the lever
- * we hold is the per-merchant API access switch on the merchant page. This
- * page is for watching: who holds a token, from where, and whether it has
- * tried anything it is not allowed to (refused requests are flagged).
+ * Merchants mint and revoke their own tokens in the hub. This page is mostly
+ * for watching: who holds a token, from where, and whether it has tried
+ * anything it is not allowed to (refused requests are flagged). The one lever
+ * here is revoking a live token, with a reason for the audit log; per-merchant
+ * API access and revoke-all live on the merchant page. Internal merchants'
+ * tokens are left out.
  *
  * Requests made through the NUMU MCP server arrive from the MCP box, so their
  * IP is that server's, not the end client's.
  */
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 import DashboardLayout from "@/components/DashboardLayout";
-import {
-  Badge,
-  Button,
-  Card,
-  DataTable,
-  Drawer,
-  EmptyState,
-  type DataTableColumn,
-} from "@/ds";
+import { isLiveToken, RevokeTokensDialog } from "@/components/merchants/ApiTokensPanel";
+import { Badge, Button, Card, DataTable, Drawer, EmptyState, type DataTableColumn } from "@/ds";
 import { formatDateTime, formatNumber, formatRelative } from "@/lib/format";
 import {
   listApiTokenRequests,
   listApiTokens,
+  revokeApiToken,
   type ApiTokenItem,
   type ApiTokenRequest,
 } from "@/services/apiTokensApi";
@@ -214,17 +211,53 @@ function TokenTrail({ token, onClose }: { token: ApiTokenItem; onClose: () => vo
 }
 
 export default function ApiTokens() {
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState<ApiTokenItem | null>(null);
+  const [revoking, setRevoking] = useState<ApiTokenItem | null>(null);
   const tokens = useQuery({
     queryKey: ["api-tokens"],
-    queryFn: listApiTokens,
+    queryFn: () => listApiTokens(),
     refetchInterval: 30_000,
   });
+
+  const revoke = useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) => revokeApiToken(id, reason),
+    onSuccess: (t) => {
+      toast.success(`Token "${t.name}" revoked`, {
+        description: "It is refused from its next request.",
+      });
+      setRevoking(null);
+      void queryClient.invalidateQueries({ queryKey: ["api-tokens"] });
+    },
+    onError: (err: unknown) => toast.error(err instanceof Error ? err.message : String(err)),
+  });
+
+  const columns: DataTableColumn<ApiTokenItem>[] = [
+    ...tokenColumns,
+    {
+      key: "actions",
+      header: "",
+      align: "end",
+      render: (t) =>
+        isLiveToken(t) ? (
+          <Button
+            size="sm"
+            variant="danger-outline"
+            onClick={(e) => {
+              e.stopPropagation();
+              setRevoking(t);
+            }}
+          >
+            Revoke
+          </Button>
+        ) : null,
+    },
+  ];
 
   return (
     <DashboardLayout
       title="API tokens"
-      subtitle="Every merchant API token and what it has been doing. Refused requests are flagged."
+      subtitle="Every merchant API token and what it has been doing. Refused requests are flagged; live tokens can be revoked."
       actions={
         <Button
           variant="subtle"
@@ -238,7 +271,7 @@ export default function ApiTokens() {
     >
       <Card flush>
         <DataTable
-          columns={tokenColumns}
+          columns={columns}
           rows={tokens.data ?? []}
           rowKey={(t) => t.id}
           dense
@@ -264,6 +297,17 @@ export default function ApiTokens() {
       </Card>
 
       {open ? <TokenTrail token={open} onClose={() => setOpen(null)} /> : null}
+
+      {revoking ? (
+        <RevokeTokensDialog
+          title={`Revoke "${revoking.name}"?`}
+          description={`${revoking.token_prefix}… held by ${revoking.store_name ?? revoking.tenant ?? "this merchant"} stops working on its next request. This cannot be undone — the merchant has to mint a new token.`}
+          confirmLabel="Revoke token"
+          pending={revoke.isPending}
+          onConfirm={(reason) => revoke.mutate({ id: revoking.id, reason })}
+          onClose={() => setRevoking(null)}
+        />
+      ) : null}
     </DashboardLayout>
   );
 }

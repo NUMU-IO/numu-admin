@@ -4,53 +4,83 @@
  * The plan matrix decides by default — Pro and Enterprise include the API —
  * but it is too blunt on its own: a partner on a pilot, an agency integrating
  * one Starter merchant, or a negotiated deal should not need a plan change.
- * This is that lever, and it is the whole reason the grant exists.
+ * And the reverse: a merchant abusing the API should lose it without losing
+ * their plan. This is that lever, in three positions: follow the plan, always
+ * on, or blocked.
  *
- * Revoking is not cosmetic. Access is checked on every API request and every
- * webhook delivery, so switching it off stops a live integration mid-sentence
- * — which is why it asks first and says what will break.
+ * Switching it off is not cosmetic. Access is checked on every API request,
+ * so it stops a live integration on its next call — which is why it asks
+ * first and says what will break. Webhook deliveries are a separate
+ * entitlement and keep running.
  */
 
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-import { Badge, Button, Card, Dialog, KeyValue, Switch, type KeyValueItem } from "@/ds";
-import { setTenantApiAccess } from "@/services/apiAccessApi";
+import {
+  Badge,
+  Button,
+  Card,
+  Chip,
+  Dialog,
+  FormField,
+  Input,
+  KeyValue,
+  Skeleton,
+  type KeyValueItem,
+} from "@/ds";
+import {
+  getTenantApiAccess,
+  setTenantApiAccess,
+  type ApiAccessMode,
+  type ApiAccessState,
+} from "@/services/apiAccessApi";
 
 interface Props {
   tenantId: string | null | undefined;
-  plan: string | null | undefined;
-  featureFlags: Record<string, boolean> | undefined;
   storeName?: string;
 }
 
-export function ApiAccessPanel({ tenantId, plan, featureFlags, storeName }: Props) {
-  const queryClient = useQueryClient();
-  const [granted, setGranted] = useState(Boolean(featureFlags?.api_access));
-  const [inPlan, setInPlan] = useState<boolean | null>(null);
-  const [confirmRevoke, setConfirmRevoke] = useState(false);
+const MODES: { id: ApiAccessMode; label: string }[] = [
+  { id: "plan", label: "Follow plan" },
+  { id: "on", label: "Always on" },
+  { id: "off", label: "Blocked" },
+];
 
-  // Until the first call answers, the plan name is the only signal we have.
-  const planIncludes =
-    inPlan ?? ["pro", "enterprise"].includes((plan ?? "").toLowerCase());
-  const allowed = planIncludes || granted;
+const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+function effective(s: ApiAccessState): { on: boolean; text: string } {
+  if (s.mode === "off") return { on: false, text: "API blocked by NUMU" };
+  if (!s.active) return { on: false, text: "API off — merchant suspended" };
+  if (s.mode === "on") return { on: true, text: "API on — granted by NUMU" };
+  if (s.in_plan) return { on: true, text: `API on — included in ${capitalize(s.plan)} plan` };
+  return { on: false, text: "API off — not in plan" };
+}
+
+export function ApiAccessPanel({ tenantId, storeName }: Props) {
+  const queryClient = useQueryClient();
+  const [note, setNote] = useState("");
+  const [confirmOff, setConfirmOff] = useState<ApiAccessMode | null>(null);
+  const queryKey = ["api-access", tenantId];
+
+  const access = useQuery({
+    queryKey,
+    queryFn: () => getTenantApiAccess(tenantId!),
+    enabled: Boolean(tenantId),
+  });
 
   const save = useMutation({
-    mutationFn: (enabled: boolean) => setTenantApiAccess(tenantId!, enabled),
+    mutationFn: (mode: ApiAccessMode) =>
+      setTenantApiAccess(tenantId!, mode, note.trim() || undefined),
     onSuccess: (state) => {
-      setGranted(state.granted);
-      setInPlan(state.in_plan);
-      toast.success(
-        state.allowed
-          ? `API access is on for ${storeName ?? "this merchant"}`
-          : `API access is off for ${storeName ?? "this merchant"}`,
-        {
-          description: state.allowed
-            ? "They can mint tokens and receive webhooks now."
-            : "Existing tokens stop working and webhook deliveries stop.",
-        },
-      );
+      queryClient.setQueryData(queryKey, state);
+      setNote("");
+      toast.success(`${effective(state).text} for ${storeName ?? "this merchant"}`, {
+        description: state.allowed
+          ? "They can mint tokens and call the API from their next request."
+          : "Existing tokens are refused from their next request. Webhook deliveries are not affected.",
+      });
       void queryClient.invalidateQueries({ queryKey: ["merchant-detail"] });
     },
     onError: (err: unknown) => {
@@ -58,87 +88,115 @@ export function ApiAccessPanel({ tenantId, plan, featureFlags, storeName }: Prop
     },
   });
 
-  const facts: KeyValueItem[] = [
-    { label: "Plan", value: plan ?? "—" },
-    {
-      label: "Included in plan",
-      value: planIncludes ? "Yes" : "No",
-    },
-    { label: "Granted by NUMU", value: granted ? "Yes" : "No" },
-  ];
+  const state = access.data;
+  const now = state ? effective(state) : null;
 
-  const onToggle = (next: boolean) => {
-    if (!tenantId) return;
-    // Turning it off only matters when the grant is what is holding it open.
-    if (!next && !planIncludes) {
-      setConfirmRevoke(true);
+  const onPick = (mode: ApiAccessMode) => {
+    if (!state || mode === state.mode) return;
+    // Ask first only when the change takes a working API away.
+    const turnsOff = state.allowed && (mode === "off" || (mode === "plan" && !state.in_plan));
+    if (turnsOff) {
+      setConfirmOff(mode);
       return;
     }
-    save.mutate(next);
+    save.mutate(mode);
   };
+
+  const facts: KeyValueItem[] = state
+    ? [
+        { label: "Plan", value: state.plan },
+        { label: "Included in plan", value: state.in_plan ? "Yes" : "No" },
+        {
+          label: "NUMU override",
+          value: state.mode === "on" ? "Granted" : state.mode === "off" ? "Blocked" : "None",
+        },
+        { label: "Merchant active", value: state.active ? "Yes" : "No — suspended" },
+      ]
+    : [];
 
   return (
     <>
       <Card
         title="Public API"
-        subtitle="Whether this merchant can mint API tokens and receive webhooks"
+        subtitle="Whether this merchant can mint and use API tokens"
         actions={
-          allowed ? (
-            <Badge tone="success" icon="check" square>
-              {planIncludes ? "In plan" : "Granted"}
-            </Badge>
-          ) : (
-            <Badge tone="neutral" icon="lock" square>
-              Off
-            </Badge>
-          )
+          now ? (
+            now.on ? (
+              <Badge tone="success" icon="check" square>
+                On
+              </Badge>
+            ) : (
+              <Badge tone="neutral" icon="lock" square>
+                Off
+              </Badge>
+            )
+          ) : null
         }
         footer={
-          <div className="ak-cell-line">
-            <Switch
-              checked={granted}
-              disabled={!tenantId || save.isPending}
-              onChange={onToggle}
-              label="Grant API access"
-            />
-            {planIncludes ? (
-              <span className="ak-text-muted">
-                Their plan already includes it — the grant changes nothing while
-                they stay on {plan}.
-              </span>
-            ) : (
-              <span className="ak-text-muted">
-                Switches the API on for a merchant whose plan excludes it.
-              </span>
-            )}
+          <div className="ak-stack">
+            <div className="ak-cell-line" role="group" aria-label="API access">
+              {MODES.map((m) => (
+                <Chip
+                  key={m.id}
+                  selected={state?.mode === m.id}
+                  disabled={!state || save.isPending}
+                  onClick={() => onPick(m.id)}
+                >
+                  {m.label}
+                </Chip>
+              ))}
+            </div>
+            <FormField label="Note" hint="Optional. Saved with the change in the audit log.">
+              <Input
+                value={note}
+                maxLength={500}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Why the change"
+              />
+            </FormField>
           </div>
         }
       >
-        <KeyValue items={facts} />
+        {access.isLoading ? (
+          <Skeleton lines={3} />
+        ) : access.isError ? (
+          <p className="ak-text-muted">
+            {access.error instanceof Error ? access.error.message : "API access failed to load."}
+          </p>
+        ) : now ? (
+          <div className="ak-stack">
+            <p className="ak-feed__title">{now.text}</p>
+            <KeyValue items={facts} />
+          </div>
+        ) : (
+          <p className="ak-text-muted">This store has no tenant.</p>
+        )}
       </Card>
 
-      {confirmRevoke ? (
+      {confirmOff ? (
         <Dialog
           open
           tone="danger"
           icon="alertTriangle"
-          title="Revoke API access?"
-          description={`Every token ${storeName ?? "this merchant"} holds stops working immediately, and webhook deliveries stop with them. Any integration they have built goes down without warning.`}
-          onClose={() => setConfirmRevoke(false)}
+          title={
+            confirmOff === "off" ? "Block API access?" : "Return to the plan and turn the API off?"
+          }
+          description={`Every token ${storeName ?? "this merchant"} holds is refused from its next request, and any integration they have built stops working. Webhook deliveries are a separate entitlement and keep running.`}
+          onClose={() => setConfirmOff(null)}
           footer={
             <>
-              <Button variant="ghost" onClick={() => setConfirmRevoke(false)}>
+              <Button variant="ghost" onClick={() => setConfirmOff(null)}>
                 Cancel
               </Button>
               <Button
                 variant="danger"
                 loading={save.isPending}
                 onClick={() => {
-                  save.mutate(false);
-                  setConfirmRevoke(false);
+                  save.mutate(confirmOff);
+                  setConfirmOff(null);
                 }}
               >
-                Revoke access
+                {confirmOff === "off" ? "Block access" : "Follow plan"}
               </Button>
             </>
           }
