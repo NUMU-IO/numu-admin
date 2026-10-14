@@ -36,6 +36,7 @@ import WalletAdmin from "./pages/WalletAdmin";
 import SubscriptionPayments from "./pages/SubscriptionPayments";
 import WhatsappAccessRequests from "./pages/WhatsappAccessRequests";
 import ApiTokens from "./pages/ApiTokens";
+import AuditLog from "./pages/AuditLog";
 import Partners from "./pages/Partners";
 import AppReview from "./pages/AppReview";
 import PartnerNotices from "./pages/PartnerNotices";
@@ -117,6 +118,9 @@ function Router() {
       </Route>
       <Route path="/reconciliation">
         {() => <ProtectedRoute component={Reconciliation} />}
+      </Route>
+      <Route path="/audit">
+        {() => <ProtectedRoute component={AuditLog} />}
       </Route>
       <Route path="/settings">
         {() => <ProtectedRoute component={Settings} />}
