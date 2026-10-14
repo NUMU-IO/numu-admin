@@ -88,3 +88,47 @@ export async function getCustomerStats(): Promise<{
   );
   return { total: result.total, active: result.total };
 }
+
+export interface PhoneLookup {
+  phone: string;
+  customers: {
+    id: string;
+    name: string;
+    email: string;
+    store_id: string;
+    store_name: string;
+  }[];
+  orders: {
+    id: string;
+    order_number: string;
+    store_name: string;
+    status: string;
+    payment_status: string;
+    payment_method: string | null;
+    total: number;
+    currency: string;
+    created_at: string;
+  }[];
+  stats: {
+    orders: number;
+    stores: number;
+    delivered: number;
+    returned: number;
+    cancelled: number;
+    paid_total_cents: number;
+    return_rate: number | null;
+  };
+  network: {
+    total_network_orders: number;
+    total_network_rtos: number;
+    total_successful_deliveries: number;
+    total_refunds: number;
+    contributing_store_count: number;
+    network_risk_score: number | null;
+    confidence_level: string;
+  } | null;
+}
+
+export function lookupPhone(phone: string): Promise<PhoneLookup> {
+  return apiClient<PhoneLookup>(`/admin/customers/lookup?${new URLSearchParams({ phone })}`);
+}

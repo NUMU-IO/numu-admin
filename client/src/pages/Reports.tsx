@@ -34,7 +34,7 @@ function thirtyDaysAgo() {
   return isoDate(d);
 }
 
-function toCSV(rows: Record<string, unknown>[]): string {
+export function toCSV(rows: Record<string, unknown>[]): string {
   if (!rows.length) return "";
   const headers = Object.keys(rows[0]);
   const escape = (v: unknown) => {
@@ -47,7 +47,7 @@ function toCSV(rows: Record<string, unknown>[]): string {
   ].join("\n");
 }
 
-function downloadCSV(csv: string, filename: string) {
+export function downloadCSV(csv: string, filename: string) {
   const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
   const a = document.createElement("a");
   a.href = url;
