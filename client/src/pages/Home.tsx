@@ -533,7 +533,7 @@ export default function Home() {
               size="sm"
               variant="ghost"
               iconEnd="arrowRight"
-              onClick={() => navigate("/settings")}
+              onClick={() => navigate("/audit")}
             >
               Audit log
             </Button>
