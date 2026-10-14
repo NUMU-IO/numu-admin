@@ -88,6 +88,8 @@ export async function getMerchants(params: {
   offset?: number;
   status?: string;
   search?: string;
+  /** "only" lists internal and demo merchants, which the default list leaves out. */
+  internal?: "only";
 }): Promise<{ merchants: Merchant[]; total: number }> {
   const limit = params.limit || 20;
   const page = Math.floor((params.offset || 0) / limit) + 1;
@@ -97,6 +99,7 @@ export async function getMerchants(params: {
   searchParams.set("limit", String(limit));
   if (params.status) searchParams.set("status", params.status);
   if (params.search) searchParams.set("search", params.search);
+  if (params.internal) searchParams.set("internal", params.internal);
 
   const result = await apiClient<PaginatedResponse<ApiStoreItem>>(
     `/admin/stores/?${searchParams}`,
@@ -116,6 +119,16 @@ export async function getMerchantStats(): Promise<{
   inactive: number;
 }> {
   return apiClient("/admin/stores/stats");
+}
+
+export async function updateTenant(
+  tenantId: string,
+  patch: { plan?: string; is_active?: boolean; is_internal?: boolean },
+): Promise<unknown> {
+  return apiClient(`/admin/tenants/${tenantId}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
 }
 
 export async function updateMerchantStatus(
@@ -239,6 +252,7 @@ export interface MerchantDetail {
     next_renewal_at: string | null;
     payment_method_last4: string | null;
     feature_flags: Record<string, boolean>;
+    is_internal?: boolean;
     is_demo: boolean;
     demo_name: string | null;
     demo_email: string | null;

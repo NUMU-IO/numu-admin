@@ -30,6 +30,7 @@ import {
   Pagination,
   Select,
   StatusBadge,
+  Tabs,
   type DataTableColumn,
 } from "@/ds";
 import { formatDate, formatMoneyShort, formatNumber } from "@/lib/format";
@@ -70,6 +71,7 @@ export default function Merchants() {
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
 
+  const [tab, setTab] = useState<"merchants" | "internal">("merchants");
   const [search, setSearch] = useState("");
   const [view, setView] = useState("all");
   const [page, setPage] = useState(1);
@@ -87,6 +89,7 @@ export default function Merchants() {
     offset: (page - 1) * PAGE_SIZE,
     status: view !== "all" ? view : undefined,
     search: search || undefined,
+    internal: tab === "internal" ? ("only" as const) : undefined,
   };
 
   const { data, isLoading } = useQuery({
@@ -133,8 +136,8 @@ export default function Merchants() {
     onSuccess: (_d, v) => {
       toast.success(
         v.isInternal
-          ? "Marked internal — excluded from every platform aggregate"
-          : "Marked real — included in platform aggregates",
+          ? "Marked internal — moved to the Internal tab and excluded from platform aggregates"
+          : "Marked real — moved to Merchants and included in platform aggregates",
       );
       invalidate();
     },
@@ -275,11 +278,11 @@ export default function Merchants() {
         <div className="ak-rowactions" onClick={(e) => e.stopPropagation()}>
           <IconButton
             icon="flag"
-            label={m.isInternal ? "Mark as a real merchant" : "Mark as internal"}
+            label={tab === "internal" ? "Mark as a real merchant" : "Mark as internal"}
             size="sm"
             disabled={internalMutation.isPending}
             onClick={() =>
-              internalMutation.mutate({ id: m.merchantId, isInternal: !m.isInternal })
+              internalMutation.mutate({ id: m.merchantId, isInternal: tab !== "internal" })
             }
           />
           <IconButton
@@ -338,7 +341,20 @@ export default function Merchants() {
   return (
     <DashboardLayout
       title="Merchants"
-      subtitle="Every store on the platform, including internal ones."
+      subtitle="Every merchant store on the platform. Internal and demo stores are under Internal."
+      tabs={
+        <Tabs
+          tabs={[
+            { id: "merchants", label: "Merchants" },
+            { id: "internal", label: "Internal" },
+          ]}
+          active={tab}
+          onChange={(id) => {
+            setTab(id as "merchants" | "internal");
+            setPage(1);
+          }}
+        />
+      }
     >
       <div className="ak-metrics ak-metrics--4">
         <MetricCard
@@ -402,17 +418,25 @@ export default function Merchants() {
           rows={merchants}
           rowKey={(m) => m.merchantId}
           loading={isLoading}
-          caption="Merchants on the platform"
+          caption={tab === "internal" ? "Internal merchants" : "Merchants on the platform"}
           onRowClick={(m) => navigate(`/merchants/${m.merchantId}`)}
           isFlagged={(m) => m.status === "suspended"}
           empty={
             <EmptyState
               kind={search || view !== "all" ? "noResults" : "empty"}
-              title={search || view !== "all" ? "Nothing matches" : "No merchants yet"}
+              title={
+                search || view !== "all"
+                  ? "Nothing matches"
+                  : tab === "internal"
+                    ? "No internal merchants"
+                    : "No merchants yet"
+              }
               body={
                 search || view !== "all"
                   ? "Widen the search or switch to another saved view."
-                  : "A merchant appears here as soon as their first store is created."
+                  : tab === "internal"
+                    ? "Stores marked internal and demo stores appear here."
+                    : "A merchant appears here as soon as their first store is created."
               }
               action={
                 search || view !== "all" ? (

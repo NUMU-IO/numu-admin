@@ -123,3 +123,20 @@ export function formatCompact(n: number | null | undefined): string {
   if (Math.abs(v) < 1_000_000) return `${(v / 1000).toFixed(v % 1000 === 0 ? 0 : 1)}k`;
   return `${(v / 1_000_000).toFixed(1)}M`;
 }
+
+/** `app_listing_flags` / `risk-queue` → "App listing flags". */
+export function sentenceCase(code: string): string {
+  const words = code.replace(/[_-]+/g, " ").trim().toLowerCase();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/**
+ * Audit action codes → operator language.
+ * `status:shipped->delivered` → "Order Shipped → Delivered"; anything else is
+ * sentence-cased, so a code nobody mapped still reads as words.
+ */
+export function humanizeAction(action: string): string {
+  const status = /^status:([\w-]+)->([\w-]+)$/.exec(action);
+  if (status) return `Order ${sentenceCase(status[1])} → ${sentenceCase(status[2])}`;
+  return sentenceCase(action);
+}

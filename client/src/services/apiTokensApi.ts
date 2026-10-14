@@ -24,6 +24,7 @@ export interface ApiTokenItem {
   name: string;
   token_prefix: string;
   scopes: string[] | null;
+  tenant_id: string | null;
   tenant: string | null;
   store_id: string | null;
   store_name: string | null;
@@ -40,8 +41,27 @@ export interface ApiTokenItem {
   };
 }
 
-export function listApiTokens(): Promise<ApiTokenItem[]> {
-  return apiClient<ApiTokenItem[]>("/admin/api-tokens");
+/** Internal merchants' tokens are left out unless `tenantId` names one. */
+export function listApiTokens(tenantId?: string): Promise<ApiTokenItem[]> {
+  const query = tenantId ? `?tenant_id=${encodeURIComponent(tenantId)}` : "";
+  return apiClient<ApiTokenItem[]>(`/admin/api-tokens${query}`);
+}
+
+export function revokeApiToken(tokenId: string, reason: string): Promise<ApiTokenItem> {
+  return apiClient<ApiTokenItem>(`/admin/api-tokens/${tokenId}/revoke`, {
+    method: "POST",
+    body: JSON.stringify({ reason }),
+  });
+}
+
+export function revokeAllApiTokens(
+  tenantId: string,
+  reason: string,
+): Promise<{ revoked: number }> {
+  return apiClient<{ revoked: number }>(`/admin/tenants/${tenantId}/api-tokens/revoke-all`, {
+    method: "POST",
+    body: JSON.stringify({ reason }),
+  });
 }
 
 export function listApiTokenRequests(tokenId: string, limit = 200): Promise<ApiTokenRequest[]> {

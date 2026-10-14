@@ -8,8 +8,8 @@
  *
  * Every number comes from `/admin/dashboard/overview`, which computes them in
  * one pass so no two tiles can disagree. Open support cases renders as a dash
- * rather than a zero: this platform has no support-case table, and a queue
- * that reads zero looks cleared rather than absent.
+ * when the API sends none: a queue that reads zero looks cleared rather than
+ * absent.
  */
 
 import DashboardLayout from "@/components/DashboardLayout";
@@ -33,8 +33,11 @@ import {
   formatCompact,
   formatDateTime,
   formatMoney,
+  formatMoneyShort,
   formatNumber,
   formatRelative,
+  humanizeAction,
+  sentenceCase,
 } from "@/lib/format";
 import {
   getAdminOverview,
@@ -68,8 +71,14 @@ function delta(t: Trend | null | undefined): string | undefined {
   return `${sign}${t.delta}${unit}`;
 }
 
+const HEALTH_LABEL: Record<string, string> = {
+  payment_failure_rate: "Payment failures",
+  webhook_backlog: "Webhook backlog",
+  risk_queue: "Risk review queue",
+};
+
 /**
- * `+201012345678` → `+2010 †† 45 ††`.
+ * `+201012345678` → `+2010•••34••`.
  *
  * The design system masks customer contact details in operational lists: an
  * operator needs to recognise a number they were already given, not to be
@@ -79,7 +88,7 @@ function maskPhone(phone: string | null): string {
   if (!phone) return "—";
   const digits = phone.replace(/[^\d+]/g, "");
   if (digits.length < 9) return phone;
-  return `${digits.slice(0, 5)} †† ${digits.slice(7, 9)} ††`;
+  return `${digits.slice(0, 5)}•••${digits.slice(7, 9)}••`;
 }
 
 export default function Home() {
@@ -112,7 +121,7 @@ export default function Home() {
       render: (o) => (
         <div>
           <div>{o.customer_name || "Guest"}</div>
-          <div className="ntb__sub numu-phone">{maskPhone(o.customer_phone)}</div>
+          <div className="ntb__sub numu-phone" dir="ltr">{maskPhone(o.customer_phone)}</div>
         </div>
       ),
     },
@@ -250,14 +259,14 @@ export default function Home() {
           loading={isLoading}
           sparkline={
             m?.orders_today.spark.length ? (
-              <Sparkline data={m.orders_today.spark} area label="Order value per day, last 14 days" />
+              <Sparkline data={m.orders_today.spark} area label="Orders per day, last 14 days" />
             ) : undefined
           }
           onClick={() => navigate("/orders")}
         />
         <MetricCard
           label="Order value today"
-          value={formatMoney(m?.order_value_today.value ?? 0)}
+          value={formatMoneyShort(m?.order_value_today.value)}
           delta={delta(m?.order_value_today)}
           note={m?.order_value_today.note ?? undefined}
           icon="banknote"
@@ -266,14 +275,14 @@ export default function Home() {
             m?.order_value_today.spark.length ? (
               <Sparkline
                 data={m.order_value_today.spark}
-                label="Paid order value per hour today"
+                label="Paid order value per day, last 14 days"
               />
             ) : undefined
           }
         />
         <MetricCard
           label="Trial → paid · 30d"
-          value={m ? m.trial_to_paid_30d.value : 0}
+          value={formatNumber(m?.trial_to_paid_30d.value)}
           unit="%"
           note={m?.trial_to_paid_30d.note ?? undefined}
           icon="trendingUp"
@@ -314,10 +323,14 @@ export default function Home() {
         />
         <MetricCard
           label="Open support cases"
-          value="—"
-          note="no case system on this platform"
+          value={
+            m?.open_support_cases ? formatNumber(m.open_support_cases.value) : "—"
+          }
+          note={m?.open_support_cases?.note ?? undefined}
           icon="inbox"
+          alert={Boolean(m?.open_support_cases?.value)}
           loading={isLoading}
+          onClick={() => navigate("/support-cases")}
         />
         <MetricCard
           label="Failed jobs & webhooks"
@@ -348,14 +361,14 @@ export default function Home() {
           <div className="ak-metrics ak-metrics--4">
             <MetricCard
               label="Recognised revenue"
-              value={formatMoney(e?.recognised_30d ?? 0)}
+              value={formatMoneyShort(e?.recognised_30d)}
               note="subscriptions + commission"
               icon="banknote"
               loading={isLoading}
             />
             <MetricCard
               label="MRR"
-              value={formatMoney(e?.mrr_cents ?? 0)}
+              value={formatMoneyShort(e?.mrr_cents)}
               note={`${formatNumber(e?.mrr_subscribers)} paid plans`}
               icon="trendingUp"
               flat
@@ -363,7 +376,7 @@ export default function Home() {
             />
             <MetricCard
               label="Subscriptions collected"
-              value={formatMoney(e?.subscriptions_collected_30d ?? 0)}
+              value={formatMoneyShort(e?.subscriptions_collected_30d)}
               note="approved receipts"
               icon="clipboard"
               flat
@@ -371,7 +384,7 @@ export default function Home() {
             />
             <MetricCard
               label="Pay-as-you-go commission"
-              value={formatMoney(e?.payg_commission_30d ?? 0)}
+              value={formatMoneyShort(e?.payg_commission_30d)}
               note="net of reversals"
               icon="creditCard"
               flat
@@ -583,7 +596,9 @@ export default function Home() {
                               : "Normal"
                         }
                       />
-                      <span className="numu-label">{h.id}</span>
+                      <span className="numu-label">
+                        {HEALTH_LABEL[h.id] ?? sentenceCase(h.id)}
+                      </span>
                     </div>
                     <p className="ak-feed__title">{h.title}</p>
                     <p className="ak-feed__meta">{h.detail}</p>
@@ -618,13 +633,20 @@ function ActivityRow({ entry }: { entry: ActivityEntry }) {
       <span className={`ak-feed__dot ak-feed__dot--${tone}`} />
       <div className="ak-feed__body">
         <div className="ak-cell-line">
-          <span className="ak-feed__title">{entry.action}</span>
+          <span className="ak-feed__title">{humanizeAction(entry.action)}</span>
           {entry.actor_type === "system" ? (
             <Badge tone="neutral" icon="zap" square>
               system
             </Badge>
           ) : (
-            <span className="numu-email ak-feed__actor">{entry.actor}</span>
+            <>
+              {entry.actor_type === "staff" ? (
+                <Badge tone="info" icon="user" square>
+                  staff
+                </Badge>
+              ) : null}
+              <span className="numu-email ak-feed__actor">{entry.actor}</span>
+            </>
           )}
         </div>
         <p className="ak-feed__meta">
