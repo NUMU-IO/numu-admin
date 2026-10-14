@@ -221,6 +221,7 @@ export default function Home() {
       <div className="ak-metrics">
         <MetricCard
           label="Active merchants"
+          title="Merchants that are switched on, not internal and not demo. Spark = signups per day, last 7 days."
           value={formatNumber(m?.active_merchants.value)}
           delta={delta(m?.active_merchants)}
           note={m?.active_merchants.note ?? undefined}
@@ -238,6 +239,7 @@ export default function Home() {
         />
         <MetricCard
           label="Active stores"
+          title="Stores with status active whose merchant is live (switched on, not internal, not demo). Delta = stores created this week."
           value={formatNumber(m?.active_stores.value)}
           delta={delta(m?.active_stores)}
           note={m?.active_stores.note ?? undefined}
@@ -247,6 +249,7 @@ export default function Home() {
         />
         <MetricCard
           label="Orders today"
+          title="Orders created since midnight UTC at live merchants, any status. Delta compares the same hours yesterday."
           value={formatNumber(m?.orders_today.value)}
           delta={delta(m?.orders_today)}
           note={m?.orders_today.note ?? undefined}
@@ -261,6 +264,7 @@ export default function Home() {
         />
         <MetricCard
           label="Order value today"
+          title="Total of orders created since midnight UTC with payment status paid, live merchants only. Delta compares the same hours yesterday."
           value={formatMoneyShort(m?.order_value_today.value)}
           delta={delta(m?.order_value_today)}
           note={m?.order_value_today.note ?? undefined}
@@ -277,6 +281,7 @@ export default function Home() {
         />
         <MetricCard
           label="Trial → paid · 30d"
+          title="Of trials started in the last 30 days, the share that has converted to a paid plan. Internal and demo merchants excluded."
           value={formatNumber(m?.trial_to_paid_30d.value)}
           unit="%"
           note={m?.trial_to_paid_30d.note ?? undefined}
@@ -289,6 +294,7 @@ export default function Home() {
       <div className="ak-metrics">
         <MetricCard
           label="Failed payments · 24h"
+          title="Orders created in the last 24 hours with payment status failed, live merchants only. Delta compares the 24 hours before."
           value={formatNumber(m?.failed_payments_24h.value)}
           delta={delta(m?.failed_payments_24h)}
           deltaDirection="up"
@@ -300,6 +306,7 @@ export default function Home() {
         />
         <MetricCard
           label="Stores requiring review"
+          title="Stores waiting for approval (pending approval) at live merchants."
           value={formatNumber(m?.stores_requiring_review.value)}
           note={m?.stores_requiring_review.note ?? undefined}
           icon="shieldAlert"
@@ -309,6 +316,7 @@ export default function Home() {
         />
         <MetricCard
           label="High-risk COD orders"
+          title="Open cash-on-delivery orders whose latest risk score is high or critical and that nobody has decided on yet."
           value={formatNumber(m?.high_risk_cod_orders.value)}
           note={m?.high_risk_cod_orders.note ?? undefined}
           icon="shield"
@@ -318,6 +326,7 @@ export default function Home() {
         />
         <MetricCard
           label="Open support cases"
+          title="Support cases that are open or pending the merchant. Cases from internal and demo merchants excluded."
           value={m?.open_support_cases ? formatNumber(m.open_support_cases.value) : "—"}
           note={m?.open_support_cases?.note ?? undefined}
           icon="inbox"
@@ -327,6 +336,7 @@ export default function Home() {
         />
         <MetricCard
           label="Failed jobs & webhooks"
+          title="Webhook deliveries to live merchants' integrations that failed or exhausted their retries. Delta = failures in the last 24 hours."
           value={formatNumber(m?.failed_jobs_webhooks.value)}
           delta={delta(m?.failed_jobs_webhooks)}
           deltaDirection="up"
@@ -354,6 +364,7 @@ export default function Home() {
           <div className="ak-metrics ak-metrics--4">
             <MetricCard
               label="Recognised revenue"
+              title="Subscriptions collected plus pay-as-you-go commission, last 30 days. Wallet top-ups are not revenue and are left out."
               value={formatMoneyShort(e?.recognised_30d)}
               note="subscriptions + commission"
               icon="banknote"
@@ -361,6 +372,7 @@ export default function Home() {
             />
             <MetricCard
               label="MRR"
+              title="Monthly price of every active paid plan; annual plans counted at a twelfth of the annual price."
               value={formatMoneyShort(e?.mrr_cents)}
               note={`${formatNumber(e?.mrr_subscribers)} paid plans`}
               icon="trendingUp"
@@ -369,6 +381,7 @@ export default function Home() {
             />
             <MetricCard
               label="Subscriptions collected"
+              title="Subscription payment receipts approved (manually or by OCR) in the last 30 days."
               value={formatMoneyShort(e?.subscriptions_collected_30d)}
               note="approved receipts"
               icon="clipboard"
@@ -377,6 +390,7 @@ export default function Home() {
             />
             <MetricCard
               label="Pay-as-you-go commission"
+              title="Commission taken from merchant wallets in the last 30 days, net of reversals."
               value={formatMoneyShort(e?.payg_commission_30d)}
               note="net of reversals"
               icon="creditCard"
