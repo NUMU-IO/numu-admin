@@ -242,11 +242,11 @@ export interface Earnings {
   plan_counts: Record<string, number>;
   subscriptions_collected_30d: number;
   payg_commission_30d: number;
-  /** Cash the wallets took in. Not revenue until it is spent as commission. */
+  /** Cash the wallets took in. Counted as revenue. */
   wallet_topups_collected_30d: number;
-  /** Merchant money currently held — a liability, not income. */
+  /** Prepaid balance not yet drawn as commission; negative means owed. */
   wallet_float_cents: number;
-  /** subscriptions_collected_30d + payg_commission_30d. */
+  /** subscriptions_collected_30d + wallet_topups_collected_30d. */
   recognised_30d: number;
 }
 

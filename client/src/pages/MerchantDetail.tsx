@@ -189,6 +189,10 @@ export default function MerchantDetail() {
       label: "Go-live exempt",
       value: d.tenant?.feature_flags?.golive_exempt ? "Yes" : "No",
     },
+    {
+      label: "Complimentary plan",
+      value: d.tenant?.feature_flags?.complimentary_plan ? "Yes" : "No",
+    },
   ];
 
   const ownerItems: KeyValueItem[] = [
