@@ -347,10 +347,9 @@ export default function Home() {
         />
       </div>
 
-      {/* What NUMU earns, as distinct from what merchants turn over. The
-          separation matters: a wallet top-up is the merchant's cash sitting
-          on the platform, and only becomes revenue once it is taken as
-          commission. Only the earned half is summed. */}
+      {/* What NUMU earns, counted on cash received: paid subscription
+          invoices plus wallet top-ups. Commission is drawn from top-ups
+          already counted, so it is shown as usage and never summed. */}
       <Card
         title="Platform earnings"
         subtitle="Last 30 days · EGP"
@@ -364,9 +363,9 @@ export default function Home() {
           <div className="ak-metrics ak-metrics--4">
             <MetricCard
               label="Recognised revenue"
-              title="Subscriptions collected plus pay-as-you-go commission, last 30 days. Wallet top-ups are not revenue and are left out."
+              title="Subscription invoices paid plus wallet top-ups received, last 30 days."
               value={formatMoneyShort(e?.recognised_30d)}
-              note="subscriptions + commission"
+              note="subscriptions + top-ups"
               icon="banknote"
               loading={isLoading}
             />
@@ -381,18 +380,18 @@ export default function Home() {
             />
             <MetricCard
               label="Subscriptions collected"
-              title="Subscription payment receipts approved (manually or by OCR) in the last 30 days."
+              title="Subscription invoices paid in the last 30 days, card and InstaPay."
               value={formatMoneyShort(e?.subscriptions_collected_30d)}
-              note="approved receipts"
+              note="paid invoices"
               icon="clipboard"
               flat
               loading={isLoading}
             />
             <MetricCard
-              label="Pay-as-you-go commission"
-              title="Commission taken from merchant wallets in the last 30 days, net of reversals."
-              value={formatMoneyShort(e?.payg_commission_30d)}
-              note="net of reversals"
+              label="Wallet top-ups"
+              title="Wallet top-ups received in the last 30 days."
+              value={formatMoneyShort(e?.wallet_topups_collected_30d)}
+              note="cash received"
               icon="creditCard"
               flat
               loading={isLoading}
@@ -420,21 +419,18 @@ export default function Home() {
             </div>
 
             <div className="ak-stack">
-              <p className="numu-label">Merchant money held</p>
+              <p className="numu-label">Wallet usage</p>
               <div className="ak-row-line">
-                <span style={{ fontSize: "var(--fs-app-sm)" }}>Top-ups taken in</span>
-                <span className="numu-mono">
-                  {formatMoney(e?.wallet_topups_collected_30d ?? 0)}
-                </span>
+                <span style={{ fontSize: "var(--fs-app-sm)" }}>Commission drawn</span>
+                <span className="numu-mono">{formatMoney(e?.payg_commission_30d ?? 0)}</span>
               </div>
               <div className="ak-row-line">
-                <span style={{ fontSize: "var(--fs-app-sm)" }}>Wallet float outstanding</span>
+                <span style={{ fontSize: "var(--fs-app-sm)" }}>Prepaid balance left</span>
                 <span className="numu-mono">{formatMoney(e?.wallet_float_cents ?? 0)}</span>
               </div>
               <p className="ak-feed__meta">
-                Top-ups are merchant cash on the platform, not income. They become revenue only as
-                commission is taken against them, which is why neither line is added to recognised
-                revenue.
+                Commission is drawn from top-ups already counted as revenue, so it is not added
+                again. A negative balance is commission merchants owe.
               </p>
             </div>
           </div>
